@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dungeon Crawler - Multiplayer RPG</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <div id="game-container">
+        <div id="start-screen" class="screen active">
+            <h1>⚔️ Dungeon Crawler ⚔️</h1>
+            <p class="subtitle">Multiplayer Procedural Dungeon RPG</p>
+            <div class="start-form">
+                <input type="text" id="character-name" placeholder="Enter your name" maxlength="20">
+                <button id="start-btn" class="btn-primary">Begin Adventure</button>
+            </div>
+            <div class="lore-section">
+                <button id="view-weapons-btn" class="btn-secondary">View Legendary Weapons</button>
+                <button id="view-bosses-btn" class="btn-secondary">View Epic Bosses</button>
+            </div>
+        </div>
+
+        <div id="game-screen" class="screen">
+            <div id="hud">
+                <div class="hud-section">
+                    <h3 id="player-name">Adventurer</h3>
+                    <div class="stat">Level: <span id="player-level">1</span></div>
+                    <div class="stat">Floor: <span id="current-floor">1</span></div>
+                </div>
+                <div class="hud-section">
+                    <div class="stat">HP: <span id="player-hp">100</span>/<span id="player-max-hp">100</span></div>
+                    <div class="progress-bar">
+                        <div id="hp-bar" class="progress-fill hp"></div>
+                    </div>
+                    <div class="stat">XP: <span id="player-xp">0</span>/<span id="player-xp-next">100</span></div>
+                    <div class="progress-bar">
+                        <div id="xp-bar" class="progress-fill xp"></div>
+                    </div>
+                </div>
+                <div class="hud-section">
+                    <div class="stat">STR: <span id="player-str">10</span></div>
+                    <div class="stat">DEX: <span id="player-dex">10</span></div>
+                    <div class="stat">INT: <span id="player-int">10</span></div>
+                    <div class="stat">VIT: <span id="player-vit">10</span></div>
+                </div>
+                <div class="hud-section">
+                    <button id="skills-btn" class="btn-small">Skills (<span id="skill-points">0</span>)</button>
+                    <button id="inventory-btn" class="btn-small">Inventory</button>
+                </div>
+            </div>
+
+            <div id="game-area">
+                <canvas id="dungeon-canvas" width="800" height="600"></canvas>
+                <div id="controls">
+                    <p>Use WASD or Arrow Keys to move</p>
+                    <p>Click enemies to attack</p>
+                    <p>Reach the stairs to descend deeper</p>
+                </div>
+            </div>
+
+            <div id="combat-log">
+                <h4>Combat Log</h4>
+                <div id="log-messages"></div>
+            </div>
+        </div>
+
+        <!-- Modals -->
+        <div id="skills-modal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2>Skills (Points: <span id="modal-skill-points">0</span>)</h2>
+                <div id="skills-list"></div>
+            </div>
+        </div>
+
+        <div id="inventory-modal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2>Inventory & Equipment</h2>
+                <div id="equipment-section">
+                    <h3>Equipped</h3>
+                    <div id="equipped-items"></div>
+                </div>
+                <div id="inventory-items"></div>
+            </div>
+        </div>
+
+
+        <div id="lore-modal" class="modal">
+            <div class="modal-content large">
+                <span class="close">&times;</span>
+                <h2 id="lore-title">Lore</h2>
+                <div id="lore-content"></div>
+            </div>
+        </div>
+
+        <div id="level-up-modal" class="modal">
+            <div class="modal-content">
+                <h2>🎉 LEVEL UP! 🎉</h2>
+                <p>You reached level <span id="new-level"></span>!</p>
+                <p>+3 Skill Points</p>
+                <p>All stats increased!</p>
+                <button id="level-up-ok" class="btn-primary">Continue</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/game.js') }}"></script>
+</body>
+</html>

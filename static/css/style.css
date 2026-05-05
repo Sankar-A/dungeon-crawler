@@ -1,0 +1,319 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: #eee;
+    overflow: hidden;
+}
+
+#game-container {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.screen {
+    display: none;
+    width: 100%;
+    height: 100%;
+}
+
+.screen.active {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Start Screen */
+#start-screen {
+    text-align: center;
+}
+
+#start-screen h1 {
+    font-size: 4rem;
+    color: #f39c12;
+    text-shadow: 3px 3px 6px rgba(0,0,0,0.7);
+    margin-bottom: 1rem;
+}
+
+.subtitle {
+    font-size: 1.5rem;
+    color: #bbb;
+    margin-bottom: 3rem;
+}
+
+.start-form {
+    margin-bottom: 2rem;
+}
+
+#character-name {
+    padding: 1rem 2rem;
+    font-size: 1.2rem;
+    border: 2px solid #f39c12;
+    background: rgba(255,255,255,0.1);
+    color: white;
+    border-radius: 8px;
+    margin-right: 1rem;
+    width: 300px;
+}
+
+.btn-primary, .btn-secondary, .btn-small {
+    padding: 1rem 2rem;
+    font-size: 1.2rem;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-weight: bold;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: scale(1.05);
+    box-shadow: 0 5px 15px rgba(243, 156, 18, 0.4);
+}
+
+.btn-secondary {
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    color: white;
+    margin: 0.5rem;
+}
+
+.btn-secondary:hover {
+    transform: scale(1.05);
+}
+
+.btn-small {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    background: #34495e;
+    color: white;
+    margin: 0.25rem;
+}
+
+.btn-small:hover {
+    background: #2c3e50;
+}
+
+/* Game Screen */
+#game-screen {
+    display: grid;
+    grid-template-columns: 300px 1fr 250px;
+    grid-template-rows: 1fr;
+    gap: 1rem;
+    padding: 1rem;
+}
+
+#hud {
+    background: rgba(0,0,0,0.7);
+    border: 2px solid #f39c12;
+    border-radius: 8px;
+    padding: 1rem;
+    overflow-y: auto;
+}
+
+.hud-section {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #555;
+}
+
+.hud-section:last-child {
+    border-bottom: none;
+}
+
+#player-name {
+    color: #f39c12;
+    margin-bottom: 0.5rem;
+}
+
+.stat {
+    margin: 0.5rem 0;
+    font-size: 1rem;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 20px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-top: 0.25rem;
+}
+
+.progress-fill {
+    height: 100%;
+    transition: width 0.3s;
+}
+
+.progress-fill.hp {
+    background: linear-gradient(90deg, #e74c3c 0%, #c0392b 100%);
+}
+
+.progress-fill.xp {
+    background: linear-gradient(90deg, #3498db 0%, #2980b9 100%);
+}
+
+#game-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+#dungeon-canvas {
+    border: 3px solid #f39c12;
+    border-radius: 8px;
+    background: #000;
+    cursor: crosshair;
+}
+
+#controls {
+    margin-top: 1rem;
+    text-align: center;
+    color: #bbb;
+}
+
+#controls p {
+    margin: 0.25rem 0;
+}
+
+#combat-log {
+    background: rgba(0,0,0,0.7);
+    border: 2px solid #e74c3c;
+    border-radius: 8px;
+    padding: 1rem;
+    overflow-y: auto;
+}
+
+#combat-log h4 {
+    color: #e74c3c;
+    margin-bottom: 0.5rem;
+}
+
+#log-messages {
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.log-entry {
+    margin: 0.5rem 0;
+    padding: 0.5rem;
+    background: rgba(255,255,255,0.05);
+    border-radius: 4px;
+}
+
+.log-entry.damage {
+    border-left: 3px solid #e74c3c;
+}
+
+.log-entry.heal {
+    border-left: 3px solid #2ecc71;
+}
+
+.log-entry.loot {
+    border-left: 3px solid #f39c12;
+}
+
+/* Modals */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.8);
+}
+
+.modal.active {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    padding: 2rem;
+    border-radius: 12px;
+    border: 2px solid #f39c12;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+}
+
+.modal-content.large {
+    max-width: 900px;
+}
+
+.close {
+    position: absolute;
+    right: 1rem;
+    top: 1rem;
+    font-size: 2rem;
+    cursor: pointer;
+    color: #bbb;
+}
+
+.close:hover {
+    color: #f39c12;
+}
+
+.skill-item, .item-card {
+    background: rgba(0,0,0,0.3);
+    padding: 1rem;
+    margin: 0.5rem 0;
+    border-radius: 8px;
+    border: 1px solid #555;
+}
+
+.skill-item:hover, .item-card:hover {
+    border-color: #f39c12;
+}
+
+.skill-item h4, .item-card h4 {
+    color: #f39c12;
+    margin-bottom: 0.5rem;
+}
+
+.skill-item button, .item-card button {
+    margin-top: 0.5rem;
+}
+
+.rarity-common { color: #bbb; }
+.rarity-uncommon { color: #2ecc71; }
+.rarity-rare { color: #3498db; }
+.rarity-legendary { color: #f39c12; }
+
+.lore-item {
+    background: rgba(0,0,0,0.4);
+    padding: 1.5rem;
+    margin: 1rem 0;
+    border-radius: 8px;
+    border-left: 4px solid #f39c12;
+}
+
+.lore-item h3 {
+    color: #f39c12;
+    margin-bottom: 0.5rem;
+}
+
+.lore-item .lore-text {
+    font-style: italic;
+    color: #bbb;
+    margin-top: 0.5rem;
+}
