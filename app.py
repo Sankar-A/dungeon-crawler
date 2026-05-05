@@ -68,12 +68,31 @@ def handle_create_character(data):
     
     join_room(floor_key)
     
+    # Get other players on this floor
+    other_players_data = {}
+    for pid, p in players.items():
+        if pid != player_id and p.floor == player.floor:
+            other_players_data[pid] = {
+                'x': p.x,
+                'y': p.y,
+                'name': p.name
+            }
+    
     emit('character_created', {
         'player': player.to_dict(),
         'dungeon': game_rooms[floor_key]['dungeon'].grid,
         'entities': game_rooms[floor_key]['entities'],
-        'enemies': {eid: e.to_dict() for eid, e in game_rooms[floor_key]['enemies'].items()}
+        'enemies': {eid: e.to_dict() for eid, e in game_rooms[floor_key]['enemies'].items()},
+        'other_players': other_players_data
     })
+    
+    # Notify other players on this floor about new player
+    emit('player_joined', {
+        'player_id': player_id,
+        'x': player.x,
+        'y': player.y,
+        'name': player.name
+    }, room=floor_key, include_self=False)
 
 @socketio.on('move')
 def handle_move(data):
@@ -108,8 +127,9 @@ def handle_move(data):
         emit('player_moved', {
             'player_id': player_id,
             'x': new_x,
-            'y': new_y
-        }, room=floor_key)
+            'y': new_y,
+            'name': player.name
+        }, room=floor_key, include_self=True)
         
         # Check for stairs
         stairs = game_rooms[floor_key]['entities']['stairs']
@@ -154,18 +174,28 @@ def handle_attack(data):
         
         del game_rooms[floor_key]['enemies'][enemy_id]
         
+        # Broadcast enemy defeat to all players in the room
         emit('enemy_defeated', {
             'enemy_id': enemy_id,
             'loot': loot,
             'player': player.to_dict(),
             'leveled_up': leveled_up,
-            'is_ranged': result['is_ranged']
-        })
+            'is_ranged': result['is_ranged'],
+            'attacker_id': player_id
+        }, room=floor_key)
     else:
+        # Send combat result to attacker
         emit('combat_result', {
             'result': result,
             'player': player.to_dict()
         })
+        
+        # Broadcast enemy HP update to all players in the room
+        emit('enemy_hp_updated', {
+            'enemy_id': enemy_id,
+            'hp': enemy.hp,
+            'max_hp': enemy.max_hp
+        }, room=floor_key)
 
 @socketio.on('descend_stairs')
 def handle_descend():
