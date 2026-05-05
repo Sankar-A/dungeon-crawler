@@ -15,9 +15,65 @@ const TILE_SIZE = 16;
 const VIEWPORT_WIDTH = 50;
 const VIEWPORT_HEIGHT = 37;
 
+// Sprite loading
+const sprites = {
+    wallsFloor: null,
+    objects: null,
+    doors: null,
+    fire: null,
+    loaded: false
+};
+
+let spritesLoaded = 0;
+const totalSprites = 4;
+let spriteRenderer = null;
+let animationLoop = null;
+
+function loadSprites() {
+    spriteRenderer = new SpriteRenderer();
+    
+    sprites.wallsFloor = new Image();
+    sprites.wallsFloor.onload = () => checkSpritesLoaded();
+    sprites.wallsFloor.src = '/static/images/walls_floor.png';
+    
+    sprites.objects = new Image();
+    sprites.objects.onload = () => checkSpritesLoaded();
+    sprites.objects.src = '/static/images/Objects.png';
+    
+    sprites.doors = new Image();
+    sprites.doors.onload = () => checkSpritesLoaded();
+    sprites.doors.src = '/static/images/doors_lever_chest_animation.png';
+    
+    sprites.fire = new Image();
+    sprites.fire.onload = () => checkSpritesLoaded();
+    sprites.fire.src = '/static/images/fire_animation.png';
+}
+
+function checkSpritesLoaded() {
+    spritesLoaded++;
+    if (spritesLoaded >= totalSprites) {
+        sprites.loaded = true;
+        if (dungeon) {
+            renderDungeon();
+            startAnimationLoop();
+        }
+    }
+}
+
+function startAnimationLoop() {
+    if (animationLoop) return;
+    animationLoop = setInterval(() => {
+        if (spriteRenderer && dungeon && player) {
+            spriteRenderer.update();
+            renderDungeon();
+        }
+    }, 100);
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     socket = io();
+    loadSprites();
     
     socket.on('connect', () => {
         console.log('Connected to server');
@@ -46,6 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         updateHUD();
         renderDungeon();
+        startAnimationLoop();
     });
     
     // Movement
@@ -232,11 +289,34 @@ function renderDungeon() {
                 worldY >= 0 && worldY < dungeon.length) {
                 
                 const tile = dungeon[worldY][worldX];
-                ctx.fillStyle = tile === 0 ? '#333' : '#111';
-                ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
                 
-                // Grid lines
-                ctx.strokeStyle = '#222';
+                if (sprites.loaded && sprites.wallsFloor) {
+                    // Use sprite tileset
+                    if (tile === 0) {
+                        // Floor tile - use different floor variations
+                        const floorVariant = (worldX + worldY) % 3;
+                        ctx.drawImage(
+                            sprites.wallsFloor,
+                            floorVariant * 16, 0, 16, 16,  // Source
+                            x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE  // Dest
+                        );
+                    } else {
+                        // Wall tile - use wall variations
+                        const wallVariant = (worldX * 3 + worldY * 7) % 4;
+                        ctx.drawImage(
+                            sprites.wallsFloor,
+                            wallVariant * 16, 16, 16, 16,  // Source (second row)
+                            x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE  // Dest
+                        );
+                    }
+                } else {
+                    // Fallback to colored tiles
+                    ctx.fillStyle = tile === 0 ? '#333' : '#111';
+                    ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                }
+                
+                // Grid lines (subtle)
+                ctx.strokeStyle = 'rgba(0,0,0,0.2)';
                 ctx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
             }
         }
@@ -249,9 +329,26 @@ function renderDungeon() {
         
         if (stairsX >= 0 && stairsX < VIEWPORT_WIDTH && 
             stairsY >= 0 && stairsY < VIEWPORT_HEIGHT) {
-            ctx.fillStyle = '#f39c12';
-            ctx.fillRect(stairsX * TILE_SIZE + 2, stairsY * TILE_SIZE + 2, 
-                        TILE_SIZE - 4, TILE_SIZE - 4);
+            
+            if (spriteRenderer) {
+                spriteRenderer.drawStairs(
+                    ctx, 
+                    stairsX * TILE_SIZE, 
+                    stairsY * TILE_SIZE, 
+                    TILE_SIZE, 
+                    sprites
+                );
+            } else if (sprites.loaded && sprites.objects) {
+                ctx.drawImage(
+                    sprites.objects,
+                    0, 32, 16, 16,
+                    stairsX * TILE_SIZE, stairsY * TILE_SIZE, TILE_SIZE, TILE_SIZE
+                );
+            } else {
+                ctx.fillStyle = '#f39c12';
+                ctx.fillRect(stairsX * TILE_SIZE + 2, stairsY * TILE_SIZE + 2, 
+                            TILE_SIZE - 4, TILE_SIZE - 4);
+            }
         }
     }
     
@@ -262,24 +359,82 @@ function renderDungeon() {
         
         if (enemyX >= 0 && enemyX < VIEWPORT_WIDTH && 
             enemyY >= 0 && enemyY < VIEWPORT_HEIGHT) {
-            ctx.fillStyle = enemy.is_boss ? '#9b59b6' : '#e74c3c';
-            ctx.fillRect(enemyX * TILE_SIZE + 2, enemyY * TILE_SIZE + 2, 
-                        TILE_SIZE - 4, TILE_SIZE - 4);
             
-            // HP bar for enemies
-            const hpPercent = enemy.hp / enemy.max_hp;
-            ctx.fillStyle = '#2ecc71';
-            ctx.fillRect(enemyX * TILE_SIZE, enemyY * TILE_SIZE - 3, 
-                        TILE_SIZE * hpPercent, 2);
+            if (spriteRenderer) {
+                spriteRenderer.drawEnemy(
+                    ctx,
+                    enemyX * TILE_SIZE,
+                    enemyY * TILE_SIZE,
+                    TILE_SIZE,
+                    enemy.is_boss,
+                    sprites
+                );
+            } else if (sprites.loaded && sprites.fire) {
+                const color = enemy.is_boss ? 1 : 0;
+                ctx.drawImage(
+                    sprites.fire,
+                    color * 16, 0, 16, 16,
+                    enemyX * TILE_SIZE, enemyY * TILE_SIZE, TILE_SIZE, TILE_SIZE
+                );
+            } else {
+                ctx.fillStyle = enemy.is_boss ? '#9b59b6' : '#e74c3c';
+                ctx.fillRect(enemyX * TILE_SIZE + 2, enemyY * TILE_SIZE + 2, 
+                            TILE_SIZE - 4, TILE_SIZE - 4);
+            }
+            
+            // HP bar
+            if (spriteRenderer) {
+                const hpPercent = enemy.hp / enemy.max_hp;
+                spriteRenderer.drawHPBar(
+                    ctx,
+                    enemyX * TILE_SIZE,
+                    enemyY * TILE_SIZE - 4,
+                    TILE_SIZE,
+                    hpPercent
+                );
+            } else {
+                const hpPercent = enemy.hp / enemy.max_hp;
+                ctx.fillStyle = '#2ecc71';
+                ctx.fillRect(enemyX * TILE_SIZE, enemyY * TILE_SIZE - 3, 
+                            TILE_SIZE * hpPercent, 2);
+            }
         }
     }
     
     // Draw player
     const playerScreenX = Math.floor(VIEWPORT_WIDTH / 2);
     const playerScreenY = Math.floor(VIEWPORT_HEIGHT / 2);
-    ctx.fillStyle = '#3498db';
-    ctx.fillRect(playerScreenX * TILE_SIZE + 2, playerScreenY * TILE_SIZE + 2, 
-                TILE_SIZE - 4, TILE_SIZE - 4);
+    
+    if (spriteRenderer) {
+        spriteRenderer.drawPlayer(
+            ctx,
+            playerScreenX * TILE_SIZE,
+            playerScreenY * TILE_SIZE,
+            TILE_SIZE,
+            sprites
+        );
+    } else if (sprites.loaded && sprites.objects) {
+        ctx.drawImage(
+            sprites.objects,
+            16, 0, 16, 16,
+            playerScreenX * TILE_SIZE, playerScreenY * TILE_SIZE, TILE_SIZE, TILE_SIZE
+        );
+    } else {
+        ctx.fillStyle = '#3498db';
+        ctx.fillRect(playerScreenX * TILE_SIZE + 2, playerScreenY * TILE_SIZE + 2, 
+                    TILE_SIZE - 4, TILE_SIZE - 4);
+    }
+    
+    // Player name tag
+    ctx.fillStyle = '#fff';
+    ctx.font = '10px Arial';
+    ctx.textAlign = 'center';
+    ctx.shadowBlur = 3;
+    ctx.shadowColor = '#000';
+    ctx.fillText(player.name, 
+                 playerScreenX * TILE_SIZE + TILE_SIZE/2, 
+                 playerScreenY * TILE_SIZE - 4);
+    ctx.shadowBlur = 0;
 }
 
 

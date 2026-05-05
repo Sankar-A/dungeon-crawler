@@ -91,7 +91,56 @@ All notable changes to the Dungeon Crawler project will be documented in this fi
 
 ---
 
-## [Unreleased] - Future Updates
+## [1.1.0] - 2026-05-06
+
+### 🎨 Sprite Enhancement Update
+
+#### ✨ Visual Improvements
+- **Professional Sprite Integration**
+  - Added CraftPix dungeon tileset sprites
+  - Walls and floor tiles with variations
+  - Professional pixel art aesthetic
+  - 16x16 pixel tiles
+
+- **Animation System**
+  - Animated player with bobbing effect
+  - Animated enemies with fire effects
+  - Pulsing stairs with glow
+  - Smooth 10 FPS animation loop
+
+- **Enhanced Effects**
+  - Glow effects for player and bosses
+  - Gradient HP bars (green → yellow → red)
+  - Shadow effects on text
+  - Boss enemies have purple glow
+
+- **Sprite Renderer Class**
+  - Custom rendering engine
+  - Animation frame management
+  - Combat visual effects
+  - Fallback rendering system
+
+#### 🛠️ Technical Changes
+- Added sprite loading system
+- Implemented animation loop
+- Created SpriteRenderer class
+- Added pixelated image rendering CSS
+- Organized sprites in `/static/images/`
+
+#### 📚 Documentation
+- Added SPRITE_ENHANCEMENTS.md
+- Updated visual feature descriptions
+- Added sprite usage guide
+
+#### 🐛 Bug Fixes
+- Fixed Werkzeug production warning
+- Added `allow_unsafe_werkzeug=True` flag
+- Updated render.yaml for Gunicorn
+- Added Gunicorn to requirements
+
+---
+
+## [1.0.0] - 2026-05-06
 
 ### 🔮 Planned Features
 
