@@ -101,6 +101,18 @@ class Player:
         """Check if player meets level requirement"""
         return self.level >= item.get('min_level', 1)
     
+    def get_weapon_range(self):
+        """Get the attack range of current weapon"""
+        if self.weapon:
+            return self.weapon.get('range', 1)
+        return 1  # Default melee range
+    
+    def is_ranged_weapon(self):
+        """Check if current weapon is ranged"""
+        if self.weapon:
+            return self.weapon.get('ranged', False)
+        return False
+    
     def to_dict(self):
         """Convert player to dictionary for JSON"""
         return {

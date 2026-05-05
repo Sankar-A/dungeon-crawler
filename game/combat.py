@@ -120,13 +120,20 @@ def generate_random_item(level):
     if item_type == 'weapon':
         weapon_types = ['sword', 'axe', 'bow', 'dagger', 'staff']
         weapon_type = random.choice(weapon_types)
+        
+        # Determine if weapon is ranged
+        ranged_types = ['bow', 'staff']
+        is_ranged = weapon_type in ranged_types
+        
         return {
             'type': 'weapon',
             'name': f"{rarity.title()} {weapon_type.title()}",
             'weapon_type': weapon_type,
             'damage': int((10 + level * 3) * rarity_multiplier),
             'min_level': max(1, level - 2),
-            'rarity': rarity
+            'rarity': rarity,
+            'ranged': is_ranged,
+            'range': 5 if is_ranged else 1
         }
     else:
         return {

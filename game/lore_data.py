@@ -34,6 +34,8 @@ RARE_WEAPONS = [
         "min_level": 18,
         "damage": 55,
         "fire_damage": 40,
+        "ranged": True,
+        "range": 7,
         "lore": "Crafted from the tailfeathers of the Eternal Phoenix. Each arrow ignites with rebirth flames that never truly die."
     },
     {
@@ -89,6 +91,8 @@ RARE_WEAPONS = [
         "min_level": 28,
         "damage": 70,
         "magic_damage": 60,
+        "ranged": True,
+        "range": 6,
         "lore": "Carved from the World Tree during the Age of Madness. Reality bends around those who master its chaotic energies."
     },
     {
@@ -107,6 +111,8 @@ RARE_WEAPONS = [
         "min_level": 26,
         "damage": 75,
         "holy_damage": 45,
+        "ranged": True,
+        "range": 8,
         "lore": "Blessed by the Celestial Council. Arrows fired from this bow streak like falling stars, bringing divine judgment."
     },
     {

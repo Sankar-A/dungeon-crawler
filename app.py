@@ -131,8 +131,22 @@ def handle_attack(data):
     
     enemy = game_rooms[floor_key]['enemies'][enemy_id]
     
+    # Check range
+    distance = max(abs(player.x - enemy.x), abs(player.y - enemy.y))
+    weapon_range = player.get_weapon_range()
+    
+    if distance > weapon_range:
+        emit('attack_failed', {
+            'reason': 'Out of range',
+            'distance': distance,
+            'range': weapon_range
+        })
+        return
+    
     # Calculate combat
     result = calculate_combat(player, enemy)
+    result['is_ranged'] = player.is_ranged_weapon()
+    result['distance'] = distance
     
     if result['enemy_defeated']:
         loot = generate_loot(enemy, player.level)
@@ -144,7 +158,8 @@ def handle_attack(data):
             'enemy_id': enemy_id,
             'loot': loot,
             'player': player.to_dict(),
-            'leveled_up': leveled_up
+            'leveled_up': leveled_up,
+            'is_ranged': result['is_ranged']
         })
     else:
         emit('combat_result', {

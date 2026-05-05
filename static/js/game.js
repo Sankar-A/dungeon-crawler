@@ -17,42 +17,75 @@ const VIEWPORT_HEIGHT = 37;
 
 // Sprite loading
 const sprites = {
-    wallsFloor: null,
-    objects: null,
-    doors: null,
-    fire: null,
+    dungeonTiles: null,
+    floorTiles: null,
+    wallTiles: null,
+    dungeonProps: null,
+    playerIdle: null,
+    playerWalk: null,
+    enemySkeleton: null,
+    enemyOrc: null,
     loaded: false
 };
 
 let spritesLoaded = 0;
-const totalSprites = 4;
+const totalSprites = 8; // All sprites
 let spriteRenderer = null;
 let animationLoop = null;
 
 function loadSprites() {
     spriteRenderer = new SpriteRenderer();
     
-    sprites.wallsFloor = new Image();
-    sprites.wallsFloor.onload = () => checkSpritesLoaded();
-    sprites.wallsFloor.src = '/static/images/walls_floor.png';
+    // Load Pixel Crawler tileset sprites
+    sprites.dungeonTiles = new Image();
+    sprites.dungeonTiles.onload = () => checkSpritesLoaded();
+    sprites.dungeonTiles.onerror = () => checkSpritesLoaded();
+    sprites.dungeonTiles.src = '/static/images/dungeon-tiles.png';
     
-    sprites.objects = new Image();
-    sprites.objects.onload = () => checkSpritesLoaded();
-    sprites.objects.src = '/static/images/Objects.png';
+    sprites.floorTiles = new Image();
+    sprites.floorTiles.onload = () => checkSpritesLoaded();
+    sprites.floorTiles.onerror = () => checkSpritesLoaded();
+    sprites.floorTiles.src = '/static/images/floor-tiles.png';
     
-    sprites.doors = new Image();
-    sprites.doors.onload = () => checkSpritesLoaded();
-    sprites.doors.src = '/static/images/doors_lever_chest_animation.png';
+    sprites.wallTiles = new Image();
+    sprites.wallTiles.onload = () => checkSpritesLoaded();
+    sprites.wallTiles.onerror = () => checkSpritesLoaded();
+    sprites.wallTiles.src = '/static/images/wall-tiles.png';
     
-    sprites.fire = new Image();
-    sprites.fire.onload = () => checkSpritesLoaded();
-    sprites.fire.src = '/static/images/fire_animation.png';
+    sprites.dungeonProps = new Image();
+    sprites.dungeonProps.onload = () => checkSpritesLoaded();
+    sprites.dungeonProps.onerror = () => checkSpritesLoaded();
+    sprites.dungeonProps.src = '/static/images/dungeon-props.png';
+    
+    // Load character sprites
+    sprites.playerIdle = new Image();
+    sprites.playerIdle.onload = () => checkSpritesLoaded();
+    sprites.playerIdle.onerror = () => checkSpritesLoaded();
+    sprites.playerIdle.src = '/static/images/player-idle.png';
+    
+    sprites.playerWalk = new Image();
+    sprites.playerWalk.onload = () => checkSpritesLoaded();
+    sprites.playerWalk.onerror = () => checkSpritesLoaded();
+    sprites.playerWalk.src = '/static/images/player-walk.png';
+    
+    // Load enemy sprites
+    sprites.enemySkeleton = new Image();
+    sprites.enemySkeleton.onload = () => checkSpritesLoaded();
+    sprites.enemySkeleton.onerror = () => checkSpritesLoaded();
+    sprites.enemySkeleton.src = '/static/images/enemy-skeleton.png';
+    
+    sprites.enemyOrc = new Image();
+    sprites.enemyOrc.onload = () => checkSpritesLoaded();
+    sprites.enemyOrc.onerror = () => checkSpritesLoaded();
+    sprites.enemyOrc.src = '/static/images/enemy-orc.png';
 }
 
 function checkSpritesLoaded() {
     spritesLoaded++;
+    console.log(`Loaded ${spritesLoaded}/${totalSprites} sprites`);
     if (spritesLoaded >= totalSprites) {
         sprites.loaded = true;
+        console.log('All sprites loaded!');
         if (dungeon) {
             renderDungeon();
             startAnimationLoop();
@@ -165,25 +198,38 @@ document.addEventListener('DOMContentLoaded', () => {
         // Check if clicked on enemy
         for (const [enemyId, enemy] of Object.entries(enemies)) {
             if (enemy.x === tileX && enemy.y === tileY) {
-                // Check if adjacent
+                // Check distance
                 const dx = Math.abs(player.x - enemy.x);
                 const dy = Math.abs(player.y - enemy.y);
+                const distance = Math.max(dx, dy);
                 
-                if (dx <= 1 && dy <= 1) {
+                // Get weapon range
+                const weaponRange = player.weapon ? (player.weapon.range || 1) : 1;
+                
+                if (distance <= weaponRange) {
                     socket.emit('attack_enemy', { enemy_id: enemyId });
                 } else {
-                    addLog('Enemy too far away!', 'damage');
+                    addLog(`Enemy too far away! (Distance: ${distance}, Range: ${weaponRange})`, 'damage');
                 }
                 break;
             }
         }
     });
     
+    socket.on('attack_failed', (data) => {
+        addLog(`${data.reason}! Distance: ${data.distance}, Range: ${data.range}`, 'damage');
+    });
+    
     socket.on('combat_result', (data) => {
         player = data.player;
         const result = data.result;
         
-        addLog(`You dealt ${result.player_damage} damage!${result.critical ? ' CRITICAL!' : ''}`, 'damage');
+        if (result.is_ranged) {
+            addLog(`🏹 You shot for ${result.player_damage} damage!${result.critical ? ' CRITICAL!' : ''}`, 'damage');
+        } else {
+            addLog(`⚔️ You dealt ${result.player_damage} damage!${result.critical ? ' CRITICAL!' : ''}`, 'damage');
+        }
+        
         if (result.dodged) {
             addLog('You dodged the attack!', 'heal');
         } else if (result.enemy_damage > 0) {
@@ -198,12 +244,17 @@ document.addEventListener('DOMContentLoaded', () => {
         player = data.player;
         delete enemies[data.enemy_id];
         
-        addLog(`Enemy defeated! +${data.loot.xp} XP`, 'loot');
+        if (data.is_ranged) {
+            addLog(`🏹 Enemy defeated with ranged attack! +${data.loot.xp} XP`, 'loot');
+        } else {
+            addLog(`⚔️ Enemy defeated! +${data.loot.xp} XP`, 'loot');
+        }
         
         if (data.loot.items.length > 0) {
             data.loot.items.forEach(item => {
                 inventory.push(item);
-                addLog(`Found: ${item.name}!`, 'loot');
+                const rangedTag = item.ranged ? ' 🏹' : '';
+                addLog(`Found: ${item.name}${rangedTag}!`, 'loot');
             });
         }
         
@@ -290,22 +341,29 @@ function renderDungeon() {
                 
                 const tile = dungeon[worldY][worldX];
                 
-                if (sprites.loaded && sprites.wallsFloor) {
-                    // Use sprite tileset
+                if (sprites.loaded && sprites.floorTiles && sprites.wallTiles) {
+                    // Use Pixel Crawler tileset
                     if (tile === 0) {
-                        // Floor tile - use different floor variations
-                        const floorVariant = (worldX + worldY) % 3;
+                        // Floor tile - Pixel Crawler floor tiles are in a grid
+                        // Use variation based on position for natural look
+                        const floorVariant = ((worldX * 3 + worldY * 7) % 4);
+                        const tileX = (floorVariant % 4) * 16;
+                        const tileY = Math.floor(floorVariant / 4) * 16;
+                        
                         ctx.drawImage(
-                            sprites.wallsFloor,
-                            floorVariant * 16, 0, 16, 16,  // Source
+                            sprites.floorTiles,
+                            tileX, tileY, 16, 16,  // Source
                             x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE  // Dest
                         );
                     } else {
                         // Wall tile - use wall variations
-                        const wallVariant = (worldX * 3 + worldY * 7) % 4;
+                        const wallVariant = ((worldX * 5 + worldY * 11) % 6);
+                        const tileX = (wallVariant % 6) * 16;
+                        const tileY = Math.floor(wallVariant / 6) * 16;
+                        
                         ctx.drawImage(
-                            sprites.wallsFloor,
-                            wallVariant * 16, 16, 16, 16,  // Source (second row)
+                            sprites.wallTiles,
+                            tileX, tileY, 16, 16,  // Source
                             x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE  // Dest
                         );
                     }
@@ -315,8 +373,9 @@ function renderDungeon() {
                     ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
                 }
                 
-                // Grid lines (subtle)
-                ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+                // Subtle grid lines
+                ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+                ctx.lineWidth = 0.5;
                 ctx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
             }
         }
@@ -330,24 +389,27 @@ function renderDungeon() {
         if (stairsX >= 0 && stairsX < VIEWPORT_WIDTH && 
             stairsY >= 0 && stairsY < VIEWPORT_HEIGHT) {
             
-            if (spriteRenderer) {
-                spriteRenderer.drawStairs(
-                    ctx, 
-                    stairsX * TILE_SIZE, 
-                    stairsY * TILE_SIZE, 
-                    TILE_SIZE, 
-                    sprites
-                );
-            } else if (sprites.loaded && sprites.objects) {
+            if (sprites.loaded && sprites.dungeonProps && sprites.dungeonProps.complete) {
+                // Draw stairs from dungeon props (usually in top-left area of props sheet)
+                // Pulsing glow effect
+                const glowIntensity = 10 + Math.sin(spriteRenderer.animationFrame * 0.5) * 5;
+                ctx.shadowBlur = glowIntensity;
+                ctx.shadowColor = '#f39c12';
+                
                 ctx.drawImage(
-                    sprites.objects,
-                    0, 32, 16, 16,
+                    sprites.dungeonProps,
+                    0, 0, 16, 16,  // Stairs sprite location (adjust if needed)
                     stairsX * TILE_SIZE, stairsY * TILE_SIZE, TILE_SIZE, TILE_SIZE
                 );
+                ctx.shadowBlur = 0;
             } else {
+                // Fallback
                 ctx.fillStyle = '#f39c12';
+                const pulse = 0.8 + Math.sin(spriteRenderer.animationFrame * 0.5) * 0.2;
+                ctx.globalAlpha = pulse;
                 ctx.fillRect(stairsX * TILE_SIZE + 2, stairsY * TILE_SIZE + 2, 
                             TILE_SIZE - 4, TILE_SIZE - 4);
+                ctx.globalAlpha = 1;
             }
         }
     }
@@ -360,23 +422,32 @@ function renderDungeon() {
         if (enemyX >= 0 && enemyX < VIEWPORT_WIDTH && 
             enemyY >= 0 && enemyY < VIEWPORT_HEIGHT) {
             
-            if (spriteRenderer) {
-                spriteRenderer.drawEnemy(
-                    ctx,
-                    enemyX * TILE_SIZE,
-                    enemyY * TILE_SIZE,
-                    TILE_SIZE,
-                    enemy.is_boss,
-                    sprites
-                );
-            } else if (sprites.loaded && sprites.fire) {
-                const color = enemy.is_boss ? 1 : 0;
+            // Draw enemy sprite
+            const enemySprite = enemy.is_boss ? sprites.enemyOrc : sprites.enemySkeleton;
+            if (sprites.loaded && enemySprite && enemySprite.complete) {
+                // Pixel Crawler sprites are 4 frames in a row, 16x16 each
+                const frame = Math.floor(spriteRenderer.animationFrame / 2) % 4;
                 ctx.drawImage(
-                    sprites.fire,
-                    color * 16, 0, 16, 16,
-                    enemyX * TILE_SIZE, enemyY * TILE_SIZE, TILE_SIZE, TILE_SIZE
+                    enemySprite,
+                    frame * 16, 0, 16, 16,  // Source: frame from sprite sheet
+                    enemyX * TILE_SIZE, enemyY * TILE_SIZE, TILE_SIZE, TILE_SIZE  // Dest
                 );
+                
+                // Boss glow effect
+                if (enemy.is_boss) {
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#9b59b6';
+                    ctx.globalAlpha = 0.3;
+                    ctx.drawImage(
+                        enemySprite,
+                        frame * 16, 0, 16, 16,
+                        enemyX * TILE_SIZE, enemyY * TILE_SIZE, TILE_SIZE, TILE_SIZE
+                    );
+                    ctx.globalAlpha = 1;
+                    ctx.shadowBlur = 0;
+                }
             } else {
+                // Fallback
                 ctx.fillStyle = enemy.is_boss ? '#9b59b6' : '#e74c3c';
                 ctx.fillRect(enemyX * TILE_SIZE + 2, enemyY * TILE_SIZE + 2, 
                             TILE_SIZE - 4, TILE_SIZE - 4);
@@ -405,35 +476,70 @@ function renderDungeon() {
     const playerScreenX = Math.floor(VIEWPORT_WIDTH / 2);
     const playerScreenY = Math.floor(VIEWPORT_HEIGHT / 2);
     
-    if (spriteRenderer) {
-        spriteRenderer.drawPlayer(
-            ctx,
-            playerScreenX * TILE_SIZE,
-            playerScreenY * TILE_SIZE,
-            TILE_SIZE,
-            sprites
+    // Draw attack range indicator if player has ranged weapon
+    if (player.weapon && player.weapon.ranged) {
+        const weaponRange = player.weapon.range || 1;
+        ctx.strokeStyle = 'rgba(52, 152, 219, 0.3)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(
+            playerScreenX * TILE_SIZE + TILE_SIZE / 2,
+            playerScreenY * TILE_SIZE + TILE_SIZE / 2,
+            weaponRange * TILE_SIZE,
+            0,
+            Math.PI * 2
         );
-    } else if (sprites.loaded && sprites.objects) {
+        ctx.stroke();
+    }
+    
+    // Draw player sprite
+    if (sprites.loaded && sprites.playerIdle && sprites.playerIdle.complete) {
+        // Pixel Crawler player sprites are 4 frames in a row, 16x16 each
+        const frame = Math.floor(spriteRenderer.animationFrame / 2) % 4;
+        const playerSprite = sprites.playerIdle; // Use idle for now
+        
         ctx.drawImage(
-            sprites.objects,
-            16, 0, 16, 16,
+            playerSprite,
+            frame * 16, 0, 16, 16,  // Source: frame from sprite sheet
+            playerScreenX * TILE_SIZE, playerScreenY * TILE_SIZE, TILE_SIZE, TILE_SIZE  // Dest
+        );
+        
+        // Player glow
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#3498db';
+        ctx.globalAlpha = 0.2;
+        ctx.drawImage(
+            playerSprite,
+            frame * 16, 0, 16, 16,
             playerScreenX * TILE_SIZE, playerScreenY * TILE_SIZE, TILE_SIZE, TILE_SIZE
         );
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = 0;
     } else {
+        // Fallback
         ctx.fillStyle = '#3498db';
         ctx.fillRect(playerScreenX * TILE_SIZE + 2, playerScreenY * TILE_SIZE + 2, 
                     TILE_SIZE - 4, TILE_SIZE - 4);
     }
     
-    // Player name tag
+    // Player name tag and weapon info
     ctx.fillStyle = '#fff';
-    ctx.font = '10px Arial';
+    ctx.font = 'bold 10px Arial';
     ctx.textAlign = 'center';
     ctx.shadowBlur = 3;
     ctx.shadowColor = '#000';
     ctx.fillText(player.name, 
                  playerScreenX * TILE_SIZE + TILE_SIZE/2, 
                  playerScreenY * TILE_SIZE - 4);
+    
+    // Show weapon range if ranged
+    if (player.weapon && player.weapon.ranged) {
+        ctx.fillStyle = '#3498db';
+        ctx.font = '8px Arial';
+        ctx.fillText(`Range: ${player.weapon.range}`, 
+                     playerScreenX * TILE_SIZE + TILE_SIZE/2, 
+                     playerScreenY * TILE_SIZE + TILE_SIZE + 10);
+    }
     ctx.shadowBlur = 0;
 }
 
@@ -526,10 +632,13 @@ function showInventoryModal() {
     equippedDiv.innerHTML = '<h3>Equipped</h3>';
     
     if (player.weapon) {
+        const rangedIcon = player.weapon.ranged ? ' 🏹' : ' ⚔️';
+        const rangeText = player.weapon.ranged ? `<p>Range: ${player.weapon.range} tiles</p>` : '';
         equippedDiv.innerHTML += `
             <div class="item-card">
-                <h4 class="rarity-${player.weapon.rarity || 'legendary'}">${player.weapon.name}</h4>
+                <h4 class="rarity-${player.weapon.rarity || 'legendary'}">${player.weapon.name}${rangedIcon}</h4>
                 <p>Damage: ${player.weapon.damage}</p>
+                ${rangeText}
             </div>
         `;
     } else {
@@ -557,17 +666,33 @@ function showInventoryModal() {
             itemDiv.className = 'item-card';
             
             const canEquip = player.level >= (item.min_level || 1);
+            const rangedIcon = item.ranged ? ' 🏹' : (item.type === 'weapon' ? ' ⚔️' : '');
+            const rangeText = item.ranged ? `<p>Range: ${item.range} tiles</p>` : '';
             
-            itemDiv.innerHTML = `
-                <h4 class="rarity-${item.rarity || 'legendary'}">${item.name}</h4>
-                <p>${item.type === 'weapon' ? 'Damage: ' + item.damage : 'Defense: ' + item.defense}</p>
-                <p>Min Level: ${item.min_level || 1}</p>
-                ${item.lore ? `<p class="lore-text">${item.lore}</p>` : ''}
-                <button class="btn-small" onclick="equipItem(${index})" 
-                        ${!canEquip ? 'disabled' : ''}>
-                    ${canEquip ? 'Equip' : 'Level Required'}
-                </button>
-            `;
+            if (item.type === 'weapon') {
+                itemDiv.innerHTML = `
+                    <h4 class="rarity-${item.rarity || 'legendary'}">${item.name}${rangedIcon}</h4>
+                    <p>Damage: ${item.damage}</p>
+                    ${rangeText}
+                    <p>Min Level: ${item.min_level || 1}</p>
+                    ${item.lore ? `<p class="lore-text">${item.lore}</p>` : ''}
+                    <button class="btn-small" onclick="equipItem(${index})" 
+                            ${!canEquip ? 'disabled' : ''}>
+                        ${canEquip ? 'Equip' : 'Level Required'}
+                    </button>
+                `;
+            } else {
+                itemDiv.innerHTML = `
+                    <h4 class="rarity-${item.rarity || 'legendary'}">${item.name}</h4>
+                    <p>Defense: ${item.defense}</p>
+                    <p>Min Level: ${item.min_level || 1}</p>
+                    ${item.lore ? `<p class="lore-text">${item.lore}</p>` : ''}
+                    <button class="btn-small" onclick="equipItem(${index})" 
+                            ${!canEquip ? 'disabled' : ''}>
+                        ${canEquip ? 'Equip' : 'Level Required'}
+                    </button>
+                `;
+            }
             
             inventoryDiv.appendChild(itemDiv);
         });
