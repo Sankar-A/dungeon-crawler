@@ -2,9 +2,10 @@ import random
 from typing import Dict, List
 
 class Player:
-    def __init__(self, player_id, name):
+    def __init__(self, player_id, name, user_id=None):
         self.id = player_id
         self.name = name
+        self.user_id = user_id
         self.level = 1
         self.xp = 0
         self.xp_to_next = 100
@@ -121,6 +122,7 @@ class Player:
         return {
             'id': self.id,
             'name': self.name,
+            'user_id': self.user_id,
             'level': self.level,
             'xp': self.xp,
             'xp_to_next': self.xp_to_next,

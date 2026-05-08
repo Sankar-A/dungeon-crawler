@@ -149,18 +149,16 @@ document.addEventListener('DOMContentLoaded', () => {
     socket = io();
     loadSprites();
     
+    // Initialize authentication
+    initAuth();
+    setupAuthSocketHandlers();
+    
     socket.on('connect', () => {
         console.log('Connected to server');
     });
     
     socket.on('connected', (data) => {
         console.log('Player ID:', data.player_id);
-    });
-    
-    // Start button
-    document.getElementById('start-btn').addEventListener('click', () => {
-        const name = document.getElementById('character-name').value || 'Adventurer';
-        socket.emit('create_character', { name });
     });
     
     // Character created

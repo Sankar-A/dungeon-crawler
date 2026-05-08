@@ -2,23 +2,59 @@
 Database module for persistent storage
 Uses PostgreSQL with SQLAlchemy ORM
 """
-from sqlalchemy import create_engine, Column, Integer, String, Float, JSON, DateTime, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, Float, JSON, DateTime, Boolean, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, scoped_session
+from sqlalchemy.orm import sessionmaker, scoped_session, relationship
 from datetime import datetime
 from config import Config
 import logging
+import bcrypt
+import sys
+import traceback
 
 logger = logging.getLogger(__name__)
 
 Base = declarative_base()
+
+class User(Base):
+    """User account for login"""
+    __tablename__ = 'users'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(50), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_login = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+    
+    # Relationship to characters
+    characters = relationship('PlayerData', back_populates='user', cascade='all, delete-orphan')
+    
+    def set_password(self, password):
+        """Hash and set password"""
+        self.password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    
+    def check_password(self, password):
+        """Verify password"""
+        return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
+    
+    def to_dict(self):
+        """Convert to dictionary (without password)"""
+        return {
+            'id': self.id,
+            'username': self.username,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'last_login': self.last_login.isoformat() if self.last_login else None,
+            'character_count': len(self.characters) if self.characters else 0
+        }
 
 class PlayerData(Base):
     """Persistent player data storage"""
     __tablename__ = 'players'
     
     id = Column(String, primary_key=True)  # player_id (socket session id)
-    name = Column(String, nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)  # Nullable for backward compatibility
+    name = Column(String(10), nullable=False)  # Character name (max 10 chars)
     level = Column(Integer, default=1)
     xp = Column(Integer, default=0)
     gold = Column(Integer, default=0)
@@ -44,10 +80,14 @@ class PlayerData(Base):
     last_login = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_active = Column(Boolean, default=True)
     
+    # Relationship to user
+    user = relationship('User', back_populates='characters')
+    
     def to_dict(self):
         """Convert to dictionary"""
         return {
             'id': self.id,
+            'user_id': self.user_id,
             'name': self.name,
             'level': self.level,
             'xp': self.xp,
@@ -97,10 +137,17 @@ class Database:
         
         if self.enabled:
             try:
+                logger.info("Initializing database connection...")
+                
                 # Fix postgres:// to postgresql:// for SQLAlchemy compatibility
                 database_url = Config.DATABASE_URL
                 if database_url.startswith('postgres://'):
                     database_url = database_url.replace('postgres://', 'postgresql://', 1)
+                    logger.info("Converted postgres:// to postgresql:// for SQLAlchemy")
+                
+                # Log connection attempt (without exposing password)
+                safe_url = database_url.split('@')[-1] if '@' in database_url else 'local'
+                logger.info(f"Connecting to database: {safe_url}")
                 
                 self.engine = create_engine(
                     database_url,
@@ -109,18 +156,39 @@ class Database:
                     pool_pre_ping=True,
                     echo=False
                 )
-                self.Session = scoped_session(sessionmaker(bind=self.engine))
-                Base.metadata.create_all(self.engine)
                 
-                if self.is_dev:
-                    print(f"[DEV] Database initialized (operations will be simulated)")
-                else:
-                    logger.info("Database initialized successfully")
+                logger.info("Database engine created successfully")
+                
+                self.Session = scoped_session(sessionmaker(bind=self.engine))
+                logger.info("Session factory created")
+                
+                # Create tables (will not recreate existing ones)
+                try:
+                    logger.info("Creating/updating database schema...")
+                    Base.metadata.create_all(self.engine)
+                    logger.info("Database schema initialized successfully")
+                    
+                    if self.is_dev:
+                        print(f"[DEV] Database initialized (operations will be simulated)")
+                    else:
+                        logger.info("Database initialized successfully")
+                except Exception as schema_error:
+                    logger.warning(f"Schema creation warning: {schema_error}")
+                    logger.warning(f"Traceback: {traceback.format_exc()}")
+                    # Continue anyway - tables might already exist
+                    if not self.is_dev:
+                        logger.info("Continuing with existing schema")
+                
             except Exception as e:
+                logger.error(f"Database initialization failed: {e}")
+                logger.error(f"Error type: {type(e).__name__}")
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                
                 if self.is_dev:
                     print(f"[DEV] Database initialization failed: {e} (will simulate operations)")
                 else:
-                    logger.error(f"Database initialization failed: {e}")
+                    logger.error("Database will be disabled")
+                
                 self.enabled = False
     
     def get_session(self):
@@ -159,9 +227,11 @@ class Database:
                 player_data.skill_points = player_obj.skill_points
                 player_data.last_login = datetime.utcnow()
             else:
-                # Create new
+                # Create new (should not happen with new auth flow, but keep for safety)
+                # Allow None user_id for backward compatibility
                 player_data = PlayerData(
                     id=player_obj.id,
+                    user_id=player_obj.user_id if hasattr(player_obj, 'user_id') else None,
                     name=player_obj.name,
                     level=player_obj.level,
                     xp=player_obj.xp,
@@ -240,6 +310,165 @@ class Database:
             self.Session.remove()
         if self.engine:
             self.engine.dispose()
+    
+    def create_user(self, username, password):
+        """Create a new user account"""
+        if not self.enabled:
+            return None
+        
+        if self.is_dev:
+            print(f"[DEV] DB CREATE USER: {username}")
+            return {'id': 1, 'username': username}  # Simulate success in dev
+        
+        try:
+            session = self.get_session()
+            
+            # Check if username exists
+            existing = session.query(User).filter_by(username=username).first()
+            if existing:
+                session.close()
+                return None
+            
+            # Create user
+            user = User(username=username)
+            user.set_password(password)
+            session.add(user)
+            session.commit()
+            
+            user_dict = user.to_dict()
+            session.close()
+            return user_dict
+        except Exception as e:
+            logger.error(f"Failed to create user: {e}")
+            if session:
+                session.rollback()
+                session.close()
+            return None
+    
+    def authenticate_user(self, username, password):
+        """Authenticate user and return user data"""
+        if not self.enabled:
+            return None
+        
+        if self.is_dev:
+            print(f"[DEV] DB AUTH: {username}")
+            return {'id': 1, 'username': username}  # Simulate success in dev
+        
+        try:
+            session = self.get_session()
+            user = session.query(User).filter_by(username=username, is_active=True).first()
+            
+            if user and user.check_password(password):
+                user.last_login = datetime.utcnow()
+                session.commit()
+                user_dict = user.to_dict()
+                session.close()
+                return user_dict
+            
+            session.close()
+            return None
+        except Exception as e:
+            logger.error(f"Failed to authenticate user: {e}")
+            if session:
+                session.close()
+            return None
+    
+    def get_user_characters(self, user_id):
+        """Get all characters for a user"""
+        if not self.enabled:
+            return []
+        
+        if self.is_dev:
+            print(f"[DEV] DB QUERY: Characters for user {user_id}")
+            return []  # Simulate empty list in dev
+        
+        try:
+            session = self.get_session()
+            characters = session.query(PlayerData)\
+                .filter_by(user_id=user_id, is_active=True)\
+                .order_by(PlayerData.last_login.desc())\
+                .all()
+            
+            char_list = [c.to_dict() for c in characters]
+            session.close()
+            return char_list
+        except Exception as e:
+            logger.error(f"Failed to get user characters: {e}")
+            if session:
+                session.close()
+            return []
+    
+    def create_character(self, user_id, character_name, player_id):
+        """Create a new character for a user"""
+        if not self.enabled:
+            return None
+        
+        if self.is_dev:
+            print(f"[DEV] DB CREATE CHARACTER: {character_name} for user {user_id}")
+            return True  # Simulate success in dev
+        
+        try:
+            session = self.get_session()
+            
+            # Check character limit (10 per user) - only if user_id is provided
+            if user_id:
+                char_count = session.query(PlayerData).filter_by(user_id=user_id, is_active=True).count()
+                if char_count >= 10:
+                    session.close()
+                    return None
+                
+                # Check if character name is taken by this user
+                existing = session.query(PlayerData).filter_by(user_id=user_id, name=character_name).first()
+                if existing:
+                    session.close()
+                    return None
+            
+            # Create character
+            character = PlayerData(
+                id=player_id,
+                user_id=user_id,
+                name=character_name
+            )
+            session.add(character)
+            session.commit()
+            session.close()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to create character: {e}")
+            if session:
+                session.rollback()
+                session.close()
+            return None
+    
+    def delete_character(self, user_id, character_name):
+        """Delete a character (soft delete)"""
+        if not self.enabled:
+            return False
+        
+        if self.is_dev:
+            print(f"[DEV] DB DELETE CHARACTER: {character_name} for user {user_id}")
+            return True  # Simulate success in dev
+        
+        try:
+            session = self.get_session()
+            character = session.query(PlayerData)\
+                .filter_by(user_id=user_id, name=character_name, is_active=True)\
+                .first()
+            
+            if character:
+                character.is_active = False
+                session.commit()
+                session.close()
+                return True
+            
+            session.close()
+            return False
+        except Exception as e:
+            logger.error(f"Failed to delete character: {e}")
+            if session:
+                session.rollback()
+                session.close()
+            return False
 
 
 # Global database instance

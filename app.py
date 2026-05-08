@@ -4,6 +4,8 @@ from flask_cors import CORS
 import random
 import json
 import logging
+import sys
+import traceback
 from game.dungeon_generator import DungeonGenerator
 from game.player import Player
 from game.combat import Enemy, calculate_combat, generate_loot
@@ -13,30 +15,61 @@ from cache import cache, CacheKeys
 from database import db
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 logger = logging.getLogger(__name__)
 
-# Validate configuration
-Config.validate()
+# Log startup
+logger.info("=" * 60)
+logger.info("DUNGEON CRAWLER - STARTING UP")
+logger.info("=" * 60)
 
-app = Flask(__name__)
-app.config['SECRET_KEY'] = Config.SECRET_KEY
-CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*")
+try:
+    # Validate configuration
+    logger.info("Validating configuration...")
+    Config.validate()
+    logger.info("Configuration validated successfully")
+except Exception as e:
+    logger.error(f"Configuration validation failed: {e}")
+    logger.error(f"Traceback: {traceback.format_exc()}")
+    sys.exit(1)
+
+try:
+    logger.info("Creating Flask application...")
+    app = Flask(__name__)
+    app.config['SECRET_KEY'] = Config.SECRET_KEY
+    logger.info("Flask app created")
+    
+    logger.info("Initializing CORS...")
+    CORS(app)
+    logger.info("CORS initialized")
+    
+    logger.info("Initializing SocketIO...")
+    socketio = SocketIO(app, cors_allowed_origins="*")
+    logger.info("SocketIO initialized")
+except Exception as e:
+    logger.error(f"Failed to initialize Flask/SocketIO: {e}")
+    logger.error(f"Traceback: {traceback.format_exc()}")
+    sys.exit(1)
 
 # Game state (in-memory, with cache/db backing)
 game_rooms = {}  # room_id -> game state
 players = {}  # player_id -> Player object
 loot_drops = {}  # loot_id -> { floor, x, y, items, gold }
 combat_damage = {}  # enemy_id -> { player_id: damage_dealt }
+authenticated_users = {}  # session_id -> user_data
 
-logger.info(f"Application started - Redis: {cache.enabled}, Database: {db.enabled}")
-
-# Restore loot drops from cache on startup
-if cache.enabled:
-    loot_drops = load_all_loot_drops()
-    if Config.FLASK_ENV == 'development':
-        print(f"[DEV] Restored {len(loot_drops)} loot drops from cache")
+logger.info("=" * 60)
+logger.info(f"Application started successfully")
+logger.info(f"Environment: {Config.FLASK_ENV}")
+logger.info(f"Redis Cache: {'Enabled' if cache.enabled else 'Disabled'}")
+logger.info(f"PostgreSQL DB: {'Enabled' if db.enabled else 'Disabled'}")
+logger.info("=" * 60)
 
 @app.route('/')
 def index():
@@ -199,6 +232,11 @@ def handle_connect():
 @socketio.on('disconnect')
 def handle_disconnect():
     player_id = request.sid
+    
+    # Remove from authenticated users
+    if player_id in authenticated_users:
+        del authenticated_users[player_id]
+    
     if player_id in players:
         player = players[player_id]
         room_id = f"floor_{player.floor}"
@@ -216,12 +254,120 @@ def handle_disconnect():
         emit('player_left', {'player_id': player_id}, room=room_id)
     print(f'Client disconnected: {player_id}')
 
+@socketio.on('register')
+def handle_register(data):
+    """Register a new user account"""
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    
+    # Validation
+    if not username or len(username) < 3 or len(username) > 50:
+        emit('register_failed', {'reason': 'Username must be 3-50 characters'})
+        return
+    
+    if not password or len(password) < 6:
+        emit('register_failed', {'reason': 'Password must be at least 6 characters'})
+        return
+    
+    # Create user
+    user = db.create_user(username, password)
+    if not user:
+        emit('register_failed', {'reason': 'Username already taken'})
+        return
+    
+    # Store authenticated user
+    authenticated_users[request.sid] = user
+    
+    emit('register_success', {'user': user})
+
+@socketio.on('login')
+def handle_login(data):
+    """Login with username and password"""
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    
+    if not username or not password:
+        emit('login_failed', {'reason': 'Username and password required'})
+        return
+    
+    # Authenticate
+    user = db.authenticate_user(username, password)
+    if not user:
+        emit('login_failed', {'reason': 'Invalid username or password'})
+        return
+    
+    # Store authenticated user
+    authenticated_users[request.sid] = user
+    
+    # Get user's characters
+    characters = db.get_user_characters(user['id'])
+    
+    emit('login_success', {
+        'user': user,
+        'characters': characters
+    })
+
+@socketio.on('get_characters')
+def handle_get_characters():
+    """Get list of characters for logged-in user"""
+    session_id = request.sid
+    
+    if session_id not in authenticated_users:
+        emit('auth_required', {'reason': 'Not logged in'})
+        return
+    
+    user = authenticated_users[session_id]
+    characters = db.get_user_characters(user['id'])
+    
+    emit('characters_list', {'characters': characters})
+
+@socketio.on('delete_character')
+def handle_delete_character(data):
+    """Delete a character"""
+    session_id = request.sid
+    
+    if session_id not in authenticated_users:
+        emit('auth_required', {'reason': 'Not logged in'})
+        return
+    
+    user = authenticated_users[session_id]
+    character_name = data.get('name', '').strip()
+    
+    if not character_name:
+        emit('delete_failed', {'reason': 'Character name required'})
+        return
+    
+    success = db.delete_character(user['id'], character_name)
+    if success:
+        emit('character_deleted', {'name': character_name})
+    else:
+        emit('delete_failed', {'reason': 'Character not found'})
+
 @socketio.on('create_character')
 def handle_create_character(data):
     player_id = request.sid
-    name = data.get('name', 'Adventurer')
     
-    player = Player(player_id, name)
+    # Check authentication
+    if player_id not in authenticated_users:
+        emit('auth_required', {'reason': 'Not logged in'})
+        return
+    
+    user = authenticated_users[player_id]
+    name = data.get('name', '').strip()
+    
+    # Validate character name
+    if not name or len(name) < 1 or len(name) > 10:
+        emit('character_creation_failed', {'reason': 'Character name must be 1-10 characters'})
+        return
+    
+    # Create character in database
+    if db.enabled:
+        success = db.create_character(user['id'], name, player_id)
+        if not success:
+            emit('character_creation_failed', {'reason': 'Character limit reached (10 max) or name already used'})
+            return
+    
+    player = Player(player_id, name, user['id'])
     players[player_id] = player
     
     # Generate first floor
@@ -720,9 +866,22 @@ def handle_discard_loot(data):
 
 if __name__ == '__main__':
     try:
+        logger.info("=" * 60)
+        logger.info("STARTING SERVER")
+        logger.info("=" * 60)
+        
+        # Restore loot drops from cache on startup
+        if cache.enabled:
+            logger.info("Restoring loot drops from cache...")
+            loot_drops = load_all_loot_drops()
+            logger.info(f"Restored {len(loot_drops)} loot drops from cache")
+            if Config.FLASK_ENV == 'development':
+                print(f"[DEV] Restored {len(loot_drops)} loot drops from cache")
+        
         logger.info(f"Starting server on {Config.HOST}:{Config.PORT}")
         logger.info(f"Redis Cache: {'Enabled' if cache.enabled else 'Disabled'}")
         logger.info(f"PostgreSQL DB: {'Enabled' if db.enabled else 'Disabled'}")
+        logger.info("=" * 60)
         
         socketio.run(
             app, 
@@ -732,12 +891,25 @@ if __name__ == '__main__':
             allow_unsafe_werkzeug=True
         )
     except KeyboardInterrupt:
+        logger.info("=" * 60)
         logger.info("Shutting down gracefully...")
+        logger.info("=" * 60)
+    except Exception as e:
+        logger.error("=" * 60)
+        logger.error(f"FATAL ERROR: {e}")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        logger.error("=" * 60)
+        raise
     finally:
         # Cleanup
+        logger.info("Cleaning up resources...")
         if cache.enabled:
+            logger.info("Closing cache connection...")
             cache.close()
         if db.enabled:
+            logger.info("Closing database connection...")
             db.close()
         logger.info("Server stopped")
+        logger.info("=" * 60)
 

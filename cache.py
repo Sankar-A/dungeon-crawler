@@ -5,6 +5,7 @@ Provides fast access to frequently used data
 import redis
 import json
 import logging
+import traceback
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -19,7 +20,12 @@ class Cache:
         
         if self.enabled:
             try:
+                logger.info("Initializing Redis cache...")
                 redis_url = Config.REDIS_URL
+                
+                # Log connection attempt (without exposing password)
+                safe_url = redis_url.split('@')[-1] if '@' in redis_url else 'local'
+                logger.info(f"Connecting to Redis: {safe_url}")
                 
                 # Simple connection - Render handles TLS automatically
                 self.client = redis.from_url(
@@ -29,19 +35,25 @@ class Cache:
                     socket_timeout=10
                 )
                 
+                logger.info("Testing Redis connection...")
                 # Test connection
                 self.client.ping()
+                logger.info("Redis connection successful")
                 
                 if self.is_dev:
                     print(f"[DEV] Redis cache initialized (operations will be simulated)")
                 else:
                     logger.info("Redis cache initialized successfully")
             except Exception as e:
+                logger.error(f"Redis initialization failed: {e}")
+                logger.error(f"Error type: {type(e).__name__}")
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                
                 if self.is_dev:
                     print(f"[DEV] Redis initialization failed: {e} (will simulate operations)")
                 else:
-                    logger.error(f"Redis initialization failed: {e}")
                     logger.info("Application will continue without cache")
+                
                 self.enabled = False
                 self.client = None
     

@@ -9,7 +9,59 @@
 </head>
 <body>
     <div id="game-container">
-        <div id="start-screen" class="screen active">
+        <!-- Login Screen -->
+        <div id="login-screen" class="screen active">
+            <h1>⚔️ Dungeon Crawler ⚔️</h1>
+            <p class="subtitle">Multiplayer Procedural Dungeon RPG</p>
+            
+            <div id="login-form" class="auth-form">
+                <h2>Login</h2>
+                <input type="text" id="login-username" placeholder="Username" maxlength="50">
+                <input type="password" id="login-password" placeholder="Password">
+                <button id="login-btn" class="btn-primary">Login</button>
+                <p class="form-switch">Don't have an account? <a href="#" id="show-register">Register</a></p>
+            </div>
+            
+            <div id="register-form" class="auth-form" style="display: none;">
+                <h2>Register</h2>
+                <input type="text" id="register-username" placeholder="Username (3-50 chars)" maxlength="50">
+                <input type="password" id="register-password" placeholder="Password (min 6 chars)">
+                <input type="password" id="register-password-confirm" placeholder="Confirm Password">
+                <button id="register-btn" class="btn-primary">Register</button>
+                <p class="form-switch">Already have an account? <a href="#" id="show-login">Login</a></p>
+            </div>
+            
+            <div id="auth-error" class="error-message" style="display: none;"></div>
+        </div>
+
+        <!-- Character Selection Screen -->
+        <div id="character-select-screen" class="screen">
+            <h1>⚔️ Select Character ⚔️</h1>
+            <p class="subtitle">Choose your hero or create a new one</p>
+            
+            <div id="character-list"></div>
+            
+            <div class="character-actions">
+                <button id="create-character-btn" class="btn-primary">Create New Character</button>
+                <button id="logout-btn" class="btn-secondary">Logout</button>
+            </div>
+        </div>
+
+        <!-- Character Creation Screen -->
+        <div id="character-creation-screen" class="screen">
+            <h1>⚔️ Create Character ⚔️</h1>
+            <p class="subtitle">Name your hero (max 10 characters)</p>
+            
+            <div class="start-form">
+                <input type="text" id="character-name" placeholder="Character name" maxlength="10">
+                <button id="create-btn" class="btn-primary">Create Character</button>
+                <button id="back-to-select-btn" class="btn-secondary">Back</button>
+            </div>
+            
+            <div id="creation-error" class="error-message" style="display: none;"></div>
+        </div>
+
+        <div id="start-screen" class="screen">
             <h1>⚔️ Dungeon Crawler ⚔️</h1>
             <p class="subtitle">Multiplayer Procedural Dungeon RPG</p>
             <div class="start-form">
@@ -131,6 +183,9 @@
     <script src="{{ url_for('static', filename='js/rendering/animation-renderer.js') }}"></script>
     <script src="{{ url_for('static', filename='js/rendering/player-renderer.js') }}"></script>
     <script src="{{ url_for('static', filename='js/rendering/debug-renderer.js') }}"></script>
+    
+    <!-- Authentication -->
+    <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
     
     <!-- Core game files -->
     <script src="{{ url_for('static', filename='js/sprite-renderer.js') }}"></script>

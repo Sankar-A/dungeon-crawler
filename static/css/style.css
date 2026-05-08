@@ -33,11 +33,11 @@ body {
 }
 
 /* Start Screen */
-#start-screen {
+#start-screen, #login-screen, #character-select-screen, #character-creation-screen {
     text-align: center;
 }
 
-#start-screen h1 {
+#start-screen h1, #login-screen h1, #character-select-screen h1, #character-creation-screen h1 {
     font-size: 4rem;
     color: #f39c12;
     text-shadow: 3px 3px 6px rgba(0,0,0,0.7);
@@ -48,6 +48,125 @@ body {
     font-size: 1.5rem;
     color: #bbb;
     margin-bottom: 3rem;
+}
+
+/* Auth Forms */
+.auth-form {
+    background: rgba(255,255,255,0.05);
+    padding: 2rem;
+    border-radius: 12px;
+    border: 2px solid #f39c12;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.auth-form h2 {
+    color: #f39c12;
+    margin-bottom: 1.5rem;
+}
+
+.auth-form input {
+    display: block;
+    width: 100%;
+    padding: 0.8rem;
+    margin-bottom: 1rem;
+    font-size: 1rem;
+    border: 2px solid #555;
+    background: rgba(255,255,255,0.1);
+    color: white;
+    border-radius: 6px;
+}
+
+.auth-form input:focus {
+    outline: none;
+    border-color: #f39c12;
+}
+
+.auth-form button {
+    width: 100%;
+    margin-top: 0.5rem;
+}
+
+.form-switch {
+    margin-top: 1rem;
+    color: #bbb;
+}
+
+.form-switch a {
+    color: #f39c12;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.form-switch a:hover {
+    text-decoration: underline;
+}
+
+.error-message {
+    background: rgba(231, 76, 60, 0.2);
+    border: 2px solid #e74c3c;
+    color: #e74c3c;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-top: 1rem;
+    max-width: 400px;
+}
+
+/* Character Selection */
+#character-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+    max-width: 800px;
+    margin: 2rem auto;
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 1rem;
+}
+
+.character-card {
+    background: rgba(255,255,255,0.05);
+    border: 2px solid #555;
+    border-radius: 8px;
+    padding: 1.5rem;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.character-card:hover {
+    border-color: #f39c12;
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px rgba(243, 156, 18, 0.3);
+}
+
+.character-card h3 {
+    color: #f39c12;
+    margin-bottom: 0.5rem;
+}
+
+.character-card .char-stat {
+    color: #bbb;
+    font-size: 0.9rem;
+    margin: 0.3rem 0;
+}
+
+.character-card .delete-char {
+    background: #e74c3c;
+    color: white;
+    border: none;
+    padding: 0.3rem 0.8rem;
+    border-radius: 4px;
+    margin-top: 0.5rem;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+.character-card .delete-char:hover {
+    background: #c0392b;
+}
+
+.character-actions {
+    margin-top: 2rem;
 }
 
 .start-form {

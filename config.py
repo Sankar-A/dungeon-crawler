@@ -3,10 +3,15 @@ Configuration module for Dungeon Crawler
 Loads settings from environment variables for security
 """
 import os
+import logging
 from dotenv import load_dotenv
 
+logger = logging.getLogger(__name__)
+
 # Load environment variables from .env file
+logger.info("Loading environment variables...")
 load_dotenv()
+logger.info("Environment variables loaded")
 
 class Config:
     """Application configuration"""
@@ -37,6 +42,21 @@ class Config:
     @staticmethod
     def validate():
         """Validate critical configuration"""
-        if Config.FLASK_ENV == 'production' and Config.SECRET_KEY == 'dev_secret_key_change_in_production':
-            raise ValueError("SECRET_KEY must be set in production!")
+        logger.info("Validating configuration...")
+        logger.info(f"FLASK_ENV: {Config.FLASK_ENV}")
+        logger.info(f"HOST: {Config.HOST}")
+        logger.info(f"PORT: {Config.PORT}")
+        logger.info(f"REDIS_ENABLED: {Config.REDIS_ENABLED}")
+        logger.info(f"DATABASE_ENABLED: {Config.DATABASE_ENABLED}")
+        
+        if Config.FLASK_ENV == 'production':
+            logger.info("Running in PRODUCTION mode")
+            if Config.SECRET_KEY == 'dev_secret_key_change_in_production':
+                logger.error("SECRET_KEY must be set in production!")
+                raise ValueError("SECRET_KEY must be set in production!")
+            logger.info("SECRET_KEY is properly configured")
+        else:
+            logger.info("Running in DEVELOPMENT mode")
+        
+        logger.info("Configuration validation complete")
         return True
