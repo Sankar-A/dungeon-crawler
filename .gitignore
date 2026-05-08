@@ -25,3 +25,5 @@ Pixel Crawler*.zip
 /.idea/
 inspect_cache.py
 check_db.py
+app_old.py
+static/js/game-old.js

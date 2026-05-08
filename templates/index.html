@@ -171,6 +171,18 @@
                 <div id="loot-list"></div>
             </div>
         </div>
+
+        <!-- Confirmation Modal -->
+        <div id="confirm-modal" class="modal">
+            <div class="modal-content confirm-modal">
+                <h2 id="confirm-title">Confirm</h2>
+                <p id="confirm-message"></p>
+                <div class="confirm-actions">
+                    <button id="confirm-yes" class="btn-primary">Yes</button>
+                    <button id="confirm-no" class="btn-secondary">No</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Rendering modules -->
@@ -186,6 +198,13 @@
     
     <!-- Authentication -->
     <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+    
+    <!-- Game modules -->
+    <script src="{{ url_for('static', filename='js/game/state.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/game/hud.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/game/modals.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/game/input.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/game/socket-handlers.js') }}"></script>
     
     <!-- Core game files -->
     <script src="{{ url_for('static', filename='js/sprite-renderer.js') }}"></script>

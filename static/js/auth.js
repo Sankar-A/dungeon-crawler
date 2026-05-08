@@ -2,6 +2,83 @@
 let currentUser = null;
 let userCharacters = [];
 
+// Confirmation modal handler
+function showConfirmation(title, message, onConfirm) {
+    const modal = document.getElementById('confirm-modal');
+    const titleEl = document.getElementById('confirm-title');
+    const messageEl = document.getElementById('confirm-message');
+    const yesBtn = document.getElementById('confirm-yes');
+    const noBtn = document.getElementById('confirm-no');
+    
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    modal.style.display = 'block';
+    
+    // Remove old listeners
+    const newYesBtn = yesBtn.cloneNode(true);
+    const newNoBtn = noBtn.cloneNode(true);
+    yesBtn.parentNode.replaceChild(newYesBtn, yesBtn);
+    noBtn.parentNode.replaceChild(newNoBtn, noBtn);
+    
+    // Add new listeners
+    newYesBtn.addEventListener('click', () => {
+        modal.style.display = 'none';
+        if (onConfirm) onConfirm();
+    });
+    
+    newNoBtn.addEventListener('click', () => {
+        modal.style.display = 'none';
+    });
+    
+    // Close on escape
+    const escHandler = (e) => {
+        if (e.key === 'Escape') {
+            modal.style.display = 'none';
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+}
+
+// Alert modal handler (uses confirmation modal with only OK button)
+function showAlert(title, message) {
+    const modal = document.getElementById('confirm-modal');
+    const titleEl = document.getElementById('confirm-title');
+    const messageEl = document.getElementById('confirm-message');
+    const yesBtn = document.getElementById('confirm-yes');
+    const noBtn = document.getElementById('confirm-no');
+    
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    modal.style.display = 'block';
+    
+    // Hide No button, show only Yes as OK
+    noBtn.style.display = 'none';
+    yesBtn.textContent = 'OK';
+    
+    // Remove old listeners
+    const newYesBtn = yesBtn.cloneNode(true);
+    yesBtn.parentNode.replaceChild(newYesBtn, yesBtn);
+    
+    // Add new listener
+    newYesBtn.addEventListener('click', () => {
+        modal.style.display = 'none';
+        noBtn.style.display = 'block';
+        yesBtn.textContent = 'Yes';
+    });
+    
+    // Close on escape
+    const escHandler = (e) => {
+        if (e.key === 'Escape') {
+            modal.style.display = 'none';
+            noBtn.style.display = 'block';
+            yesBtn.textContent = 'Yes';
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+}
+
 // Screen management
 function showScreen(screenId) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -79,7 +156,7 @@ function initAuth() {
     // Character selection
     document.getElementById('create-character-btn').addEventListener('click', () => {
         if (userCharacters.length >= 10) {
-            alert('Maximum 10 characters per account');
+            showAlert('Character Limit', 'Maximum 10 characters per account');
             return;
         }
         showScreen('character-creation-screen');
@@ -177,22 +254,29 @@ function renderCharacterList() {
             <div class="char-stat">Level: ${char.level}</div>
             <div class="char-stat">Floor: ${char.floor}</div>
             <div class="char-stat">Gold: ${char.gold}</div>
-            <button class="delete-char" data-name="${char.name}">Delete</button>
+            <div class="char-actions">
+                <button class="play-char" data-name="${char.name}">Play</button>
+                <button class="delete-char" data-name="${char.name}">Delete</button>
+            </div>
         `;
 
-        // Select character
-        card.addEventListener('click', (e) => {
-            if (!e.target.classList.contains('delete-char')) {
-                socket.emit('create_character', { name: char.name });
-            }
+        // Play character
+        card.querySelector('.play-char').addEventListener('click', (e) => {
+            e.stopPropagation();
+            console.log('Loading character:', char.name);
+            socket.emit('create_character', { name: char.name });
         });
 
         // Delete character
         card.querySelector('.delete-char').addEventListener('click', (e) => {
             e.stopPropagation();
-            if (confirm(`Delete character "${char.name}"?`)) {
-                socket.emit('delete_character', { name: char.name });
-            }
+            showConfirmation(
+                'Delete Character',
+                `Are you sure you want to delete "${char.name}"? This action cannot be undone.`,
+                () => {
+                    socket.emit('delete_character', { name: char.name });
+                }
+            );
         });
 
         listEl.appendChild(card);

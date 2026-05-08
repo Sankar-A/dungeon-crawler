@@ -150,15 +150,36 @@ body {
     margin: 0.3rem 0;
 }
 
+.character-card .char-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.character-card .play-char {
+    flex: 1;
+    background: #27ae60;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: bold;
+}
+
+.character-card .play-char:hover {
+    background: #229954;
+}
+
 .character-card .delete-char {
     background: #e74c3c;
     color: white;
     border: none;
-    padding: 0.3rem 0.8rem;
+    padding: 0.5rem 1rem;
     border-radius: 4px;
-    margin-top: 0.5rem;
     cursor: pointer;
-    font-size: 0.8rem;
+    font-size: 0.9rem;
 }
 
 .character-card .delete-char:hover {
@@ -167,6 +188,33 @@ body {
 
 .character-actions {
     margin-top: 2rem;
+}
+
+/* Confirmation Modal */
+.confirm-modal {
+    max-width: 400px;
+    text-align: center;
+}
+
+.confirm-modal h2 {
+    color: #f39c12;
+    margin-bottom: 1rem;
+}
+
+.confirm-modal p {
+    font-size: 1.1rem;
+    margin-bottom: 1.5rem;
+    color: #ddd;
+}
+
+.confirm-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+}
+
+.confirm-actions button {
+    min-width: 100px;
 }
 
 .start-form {

@@ -1,0 +1,157 @@
+// Socket event handlers
+function setupSocketHandlers() {
+    socket.on('character_created', (data) => {
+        player = data.player;
+        dungeon = data.dungeon;
+        entities = data.entities;
+        enemies = data.enemies;
+        otherPlayers = data.other_players || {};
+        
+        document.getElementById('start-screen').classList.remove('active');
+        document.getElementById('login-screen').classList.remove('active');
+        document.getElementById('character-select-screen').classList.remove('active');
+        document.getElementById('character-creation-screen').classList.remove('active');
+        
+        document.getElementById('game-screen').classList.add('active');
+        document.getElementById('game-screen').style.display = 'grid';
+        
+        updateHUD();
+        renderDungeon();
+        startAnimationLoop();
+    });
+    
+    socket.on('player_joined', (data) => {
+        otherPlayers[data.player_id] = {
+            x: data.x,
+            y: data.y,
+            name: data.name
+        };
+        renderDungeon();
+    });
+    
+    socket.on('player_left', (data) => {
+        delete otherPlayers[data.player_id];
+        renderDungeon();
+    });
+    
+    socket.on('player_moved', (data) => {
+        if (data.player_id === socket.id) {
+            player.x = data.x;
+            player.y = data.y;
+        } else {
+            if (otherPlayers[data.player_id]) {
+                otherPlayers[data.player_id].x = data.x;
+                otherPlayers[data.player_id].y = data.y;
+            }
+        }
+        renderDungeon();
+    });
+    
+    socket.on('combat_result', (data) => {
+        const result = data.result;
+        player = data.player;
+        
+        addLog(`You dealt ${result.player_damage} damage!`, 'combat');
+        if (result.enemy_damage > 0) {
+            addLog(`Enemy dealt ${result.enemy_damage} damage!`, 'damage');
+        }
+        
+        updateHUD();
+        renderDungeon();
+    });
+    
+    socket.on('enemy_defeated', (data) => {
+        delete enemies[data.enemy_id];
+        
+        if (data.loot_drop) {
+            lootDrops[data.loot_drop.id] = data.loot_drop;
+        }
+        
+        for (const [pid, xp] of Object.entries(data.xp_distribution)) {
+            if (pid === socket.id) {
+                addLog(`You gained ${xp} XP!`, 'xp');
+            }
+        }
+        
+        if (data.leveled_up_players[socket.id]) {
+            showLevelUpModal(data.updated_players[socket.id].level);
+        }
+        
+        if (data.updated_players[socket.id]) {
+            player = data.updated_players[socket.id];
+        }
+        
+        updateHUD();
+        renderDungeon();
+    });
+    
+    socket.on('enemy_hp_updated', (data) => {
+        if (enemies[data.enemy_id]) {
+            enemies[data.enemy_id].hp = data.hp;
+            enemies[data.enemy_id].max_hp = data.max_hp;
+        }
+        renderDungeon();
+    });
+    
+    socket.on('reached_stairs', (data) => {
+        showConfirmation(
+            'Descend Stairs',
+            `You reached the stairs to floor ${data.floor + 1}. Descend deeper into the dungeon?`,
+            () => {
+                socket.emit('descend_stairs');
+            }
+        );
+    });
+    
+    socket.on('floor_changed', (data) => {
+        player = data.player;
+        dungeon = data.dungeon;
+        entities = data.entities;
+        enemies = data.enemies;
+        lootDrops = {};
+        
+        addLog(`Descended to floor ${data.floor}!`, 'floor');
+        updateHUD();
+        renderDungeon();
+    });
+    
+    socket.on('skill_upgraded', (data) => {
+        player = data.player;
+        updateHUD();
+        showSkillsModal();
+    });
+    
+    socket.on('item_equipped', (data) => {
+        player = data.player;
+        updateHUD();
+        showInventoryModal();
+    });
+    
+    socket.on('loot_picked_up', (data) => {
+        delete lootDrops[data.loot_id];
+        
+        if (data.player_id === socket.id) {
+            player = data.player;
+            addLog(`Picked up ${data.gold} gold!`, 'loot');
+            for (const item of data.items) {
+                addLog(`Found: ${item.name}!`, 'loot');
+            }
+        }
+        
+        updateHUD();
+        renderDungeon();
+    });
+    
+    socket.on('loot_discarded', (data) => {
+        delete lootDrops[data.loot_id];
+        renderDungeon();
+    });
+    
+    socket.on('rare_weapons_list', (data) => {
+        showLoreModal('Legendary Weapons', data.weapons);
+    });
+    
+    socket.on('rare_bosses_list', (data) => {
+        showLoreModal('Epic Bosses', data.bosses);
+    });
+}
