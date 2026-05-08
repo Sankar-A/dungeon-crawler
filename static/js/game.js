@@ -17,9 +17,11 @@ let lastMoveTime = 0; // Track last movement time
 const MOVE_COOLDOWN = 250; // Minimum time between moves in ms (slower)
 let walkFrameIndex = 0; // Track current walk animation frame (0-5)
 let inputLocked = false; // Lock input during animations
-let activeModal = null; // Track which modal is open ('skills', 'inventory', or null)
+let activeModal = null; // Track which modal is open ('skills', 'inventory', 'loot', or null)
 let selectedIndex = 0; // Track selected item in modal
 let deathAnimations = []; // Track enemy death animations
+let lootDrops = []; // Track loot drops on the ground { id, x, y, items: [], gold }
+const LOOT_RANGE = 5; // Range for area loot in tiles
 
 // Canvas
 const canvas = document.getElementById('dungeon-canvas');
@@ -216,6 +218,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 activateSelectedItem();
                 return;
             }
+            else if (key === 'x') {
+                e.preventDefault();
+                discardSelectedItem();
+                return;
+            }
             // Block other inputs when modal is open
             return;
         }
@@ -250,6 +257,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.preventDefault();
                 keysPressed[key] = true;
                 showInventoryModal();
+            }
+            return;
+        }
+        else if (key === 'f') {
+            // Open area loot modal
+            if (!keysPressed[key]) {
+                e.preventDefault();
+                keysPressed[key] = true;
+                showAreaLootModal();
             }
             return;
         }
@@ -351,6 +367,7 @@ document.addEventListener('DOMContentLoaded', () => {
         dungeon = data.dungeon;
         entities = data.entities;
         enemies = data.enemies;
+        lootDrops = []; // Clear loot drops when changing floors
         
         addLog(`Descended to floor ${data.floor}!`, 'loot');
         updateHUD();
@@ -419,36 +436,51 @@ document.addEventListener('DOMContentLoaded', () => {
         if (enemy) {
             // Create death animation
             createDeathAnimation(enemy.x, enemy.y, enemy.is_boss);
+            
+            // Add loot drop if provided by server
+            if (data.loot_drop) {
+                lootDrops.push(data.loot_drop);
+            }
         }
         
         // Delete enemy for all players
         delete enemies[data.enemy_id];
         
-        // Only update player stats and show loot for the attacker
-        if (data.attacker_id === socket.id) {
-            player = data.player;
+        // Update player data if this player received XP
+        if (data.updated_players && data.updated_players[socket.id]) {
+            player = data.updated_players[socket.id];
+        }
+        
+        // Handle XP distribution for all players who dealt damage
+        if (data.xp_distribution && data.xp_distribution[socket.id]) {
+            const xpGained = data.xp_distribution[socket.id];
+            addLog(`+${xpGained} XP (damage contribution)`, 'loot');
             
-            if (data.is_ranged) {
-                addLog(`🏹 Enemy defeated with ranged attack! +${data.loot.xp} XP`, 'loot');
-            } else {
-                addLog(`⚔️ Enemy defeated! +${data.loot.xp} XP`, 'loot');
-            }
-            
-            if (data.loot.items.length > 0) {
-                data.loot.items.forEach(item => {
-                    inventory.push(item);
-                    const rangedTag = item.ranged ? ' 🏹' : '';
-                    addLog(`Found: ${item.name}${rangedTag}!`, 'loot');
-                });
-            }
-            
-            if (data.leveled_up) {
+            // Check if this player leveled up
+            if (data.leveled_up_players && data.leveled_up_players[socket.id]) {
                 showLevelUpModal();
+            }
+        }
+        
+        // Update player stats if this is the attacker
+        if (data.attacker_id === socket.id) {
+            if (data.is_ranged) {
+                addLog(`🏹 Enemy defeated with ranged attack!`, 'loot');
+            } else {
+                addLog(`⚔️ Enemy defeated!`, 'loot');
+            }
+            
+            if (data.loot_drop) {
+                addLog(`Loot dropped at (${enemy.x}, ${enemy.y}). Press F to loot nearby items.`, 'loot');
             }
             
             updateHUD();
+        } else if (data.xp_distribution && data.xp_distribution[socket.id]) {
+            // Other players who dealt damage
+            addLog(`Enemy defeated! You contributed to the kill.`, 'loot');
+            updateHUD();
         } else {
-            // Other players just see the enemy disappear
+            // Players who didn't participate
             addLog(`Enemy defeated by another player!`, 'loot');
         }
         
@@ -503,6 +535,56 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.on('rare_bosses_list', (data) => {
         rareBosses = data.bosses;
         showLoreModal('Epic Bosses', rareBosses, 'boss');
+    });
+    
+    // Loot pickup
+    socket.on('loot_picked_up', (data) => {
+        // Remove loot drop from local array for all players
+        lootDrops = lootDrops.filter(drop => drop.id !== data.loot_id);
+        
+        // Only update inventory for the player who picked it up
+        if (data.player_id === socket.id) {
+            player = data.player;
+            
+            if (data.items && data.items.length > 0) {
+                data.items.forEach(item => {
+                    inventory.push(item);
+                    const rangedTag = item.ranged ? ' 🏹' : '';
+                    addLog(`Picked up: ${item.name}${rangedTag}!`, 'loot');
+                });
+            }
+            
+            if (data.gold > 0) {
+                addLog(`+${data.gold} Gold`, 'loot');
+            }
+            
+            updateHUD();
+            
+            // Refresh loot modal if it's currently open
+            if (activeModal === 'loot') {
+                showAreaLootModal();
+            }
+        }
+        
+        renderDungeon();
+    });
+    
+    // Loot discard
+    socket.on('loot_discarded', (data) => {
+        // Remove loot drop from local array for all players
+        lootDrops = lootDrops.filter(drop => drop.id !== data.loot_id);
+        
+        // Only show message for the player who discarded it
+        if (data.player_id === socket.id) {
+            addLog('Loot discarded', 'loot');
+            
+            // Refresh loot modal if it's currently open
+            if (activeModal === 'loot') {
+                showAreaLootModal();
+            }
+        }
+        
+        renderDungeon();
     });
     
     // Modal close buttons
@@ -741,418 +823,18 @@ function renderAttackAnimations() {
 function renderDungeon() {
     if (!ctx || !dungeon || !player) return;
     
-    // Ensure crisp pixel art rendering
-    ctx.imageSmoothingEnabled = false;
-    ctx.mozImageSmoothingEnabled = false;
-    ctx.webkitImageSmoothingEnabled = false;
-    ctx.msImageSmoothingEnabled = false;
+    setupCanvas(ctx, canvas);
+    const viewport = calculateViewport(player);
     
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    const startX = player.x - Math.floor(VIEWPORT_WIDTH / 2);
-    const startY = player.y - Math.floor(VIEWPORT_HEIGHT / 2);
-    
-    // Draw tiles
-    for (let y = 0; y < VIEWPORT_HEIGHT; y++) {
-        for (let x = 0; x < VIEWPORT_WIDTH; x++) {
-            const worldX = startX + x;
-            const worldY = startY + y;
-            
-            if (worldX >= 0 && worldX < dungeon[0].length && 
-                worldY >= 0 && worldY < dungeon.length) {
-                
-                const tile = dungeon[worldY][worldX];
-                
-                if (sprites.loaded && sprites.dungeonTiles && sprites.dungeonTiles.complete) {
-                    // Dungeon_Tiles.png contains organized sections
-                    // Using specific tiles for consistency
-                    
-                    if (tile === 0) {
-                        // Floor tile - use a simple stone floor tile
-                        // Row 0, columns 0-4 typically have basic floor tiles
-                        const floorVariants = [
-                            [0, 0],   // Basic stone floor
-                            [16, 0],  // Variant 1
-                            [32, 0],  // Variant 2
-                            [48, 0],  // Variant 3
-                        ];
-                        const variantIndex = ((worldX + worldY) % floorVariants.length);
-                        const [tileX, tileY] = floorVariants[variantIndex];
-                        
-                        // Scale 16x16 sprite to fill 32x32 tile
-                        ctx.drawImage(
-                            sprites.dungeonTiles,
-                            tileX, tileY, 16, 16,
-                            x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE
-                        );
-                    } else {
-                        // Wall tile - use solid wall tiles
-                        // Walls are typically in rows 5-10
-                        const wallVariants = [
-                            [0, 80],   // Basic wall (row 5)
-                            [16, 80],  // Variant 1
-                            [32, 80],  // Variant 2
-                            [0, 96],   // Variant 3 (row 6)
-                        ];
-                        const variantIndex = ((worldX * 2 + worldY) % wallVariants.length);
-                        const [tileX, tileY] = wallVariants[variantIndex];
-                        
-                        // Scale 16x16 sprite to fill 32x32 tile
-                        ctx.drawImage(
-                            sprites.dungeonTiles,
-                            tileX, tileY, 16, 16,
-                            x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE
-                        );
-                    }
-                } else {
-                    // Fallback to colored tiles
-                    ctx.fillStyle = tile === 0 ? '#4a4a4a' : '#1a1a1a';
-                    ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-                }
-            } else {
-                // Draw black for out of bounds
-                ctx.fillStyle = '#000';
-                ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-            }
-        }
-    }
-    
-    // Draw stairs
-    if (entities && entities.stairs) {
-        const stairsX = entities.stairs[0] - startX;
-        const stairsY = entities.stairs[1] - startY;
-        
-        if (stairsX >= 0 && stairsX < VIEWPORT_WIDTH && 
-            stairsY >= 0 && stairsY < VIEWPORT_HEIGHT) {
-            
-            // Draw pulsing outline around stairs tile
-            const pulse = 0.6 + Math.sin(spriteRenderer.animationFrame * 0.3) * 0.4;
-            ctx.strokeStyle = `rgba(243, 156, 18, ${pulse})`;
-            ctx.lineWidth = 3;
-            ctx.strokeRect(
-                stairsX * TILE_SIZE + 1, 
-                stairsY * TILE_SIZE + 1, 
-                TILE_SIZE - 2, 
-                TILE_SIZE - 2
-            );
-            
-            // Draw inner glow
-            ctx.strokeStyle = `rgba(255, 200, 50, ${pulse * 0.5})`;
-            ctx.lineWidth = 1;
-            ctx.strokeRect(
-                stairsX * TILE_SIZE + 4, 
-                stairsY * TILE_SIZE + 4, 
-                TILE_SIZE - 8, 
-                TILE_SIZE - 8
-            );
-            
-            if (sprites.loaded && sprites.dungeonProps && sprites.dungeonProps.complete) {
-                // Draw stairs from dungeon props
-                // Stairs are typically in the props sheet - using a specific tile
-                // Pulsing glow effect
-                const glowIntensity = 8 + Math.sin(spriteRenderer.animationFrame * 0.3) * 4;
-                ctx.shadowBlur = glowIntensity;
-                ctx.shadowColor = '#f39c12';
-                
-                // Scale 16x16 sprite to fill 32x32 tile
-                ctx.drawImage(
-                    sprites.dungeonProps,
-                    48, 0, 16, 16,  // 3rd tile in first row (3*16, 0)
-                    stairsX * TILE_SIZE, stairsY * TILE_SIZE, TILE_SIZE, TILE_SIZE
-                );
-                ctx.shadowBlur = 0;
-            } else {
-                // Fallback - bright golden square
-                ctx.fillStyle = '#f39c12';
-                const fallbackPulse = 0.8 + Math.sin(spriteRenderer.animationFrame * 0.5) * 0.2;
-                ctx.globalAlpha = fallbackPulse;
-                ctx.fillRect(stairsX * TILE_SIZE + 2, stairsY * TILE_SIZE + 2, 
-                            TILE_SIZE - 4, TILE_SIZE - 4);
-                
-                // Draw down arrow
-                ctx.fillStyle = '#000';
-                ctx.font = 'bold 16px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText('↓', stairsX * TILE_SIZE + TILE_SIZE/2, stairsY * TILE_SIZE + TILE_SIZE/2 + 6);
-                
-                ctx.globalAlpha = 1;
-            }
-        }
-    }
-    
-    // Draw enemies
-    for (const enemy of Object.values(enemies)) {
-        const enemyX = enemy.x - startX;
-        const enemyY = enemy.y - startY;
-        
-        if (enemyX >= 0 && enemyX < VIEWPORT_WIDTH && 
-            enemyY >= 0 && enemyY < VIEWPORT_HEIGHT) {
-            
-            // Draw enemy sprite
-            const enemySprite = enemy.is_boss ? sprites.enemyOrc : sprites.enemySkeleton;
-            if (sprites.loaded && enemySprite && enemySprite.complete) {
-                // Enemy sprites are 4x1 layout: 4 frames of 32x32 each (128x32 total)
-                const frame = Math.floor(spriteRenderer.animationFrame / 2) % 4;
-                
-                ctx.save();
-                ctx.imageSmoothingEnabled = false;
-                
-                // Draw 32x32 sprite at original size, centered in 32x32 tile
-                ctx.drawImage(
-                    enemySprite,
-                    frame * 32, 0, 32, 32,  // Source: 32x32 per frame
-                    enemyX * TILE_SIZE, enemyY * TILE_SIZE, 32, 32  // Dest: 32x32 at original size
-                );
-                
-                // Boss glow effect
-                if (enemy.is_boss) {
-                    ctx.shadowBlur = 10;
-                    ctx.shadowColor = '#9b59b6';
-                    ctx.globalAlpha = 0.3;
-                    ctx.drawImage(
-                        enemySprite,
-                        frame * 32, 0, 32, 32,
-                        enemyX * TILE_SIZE, enemyY * TILE_SIZE, 32, 32
-                    );
-                    ctx.globalAlpha = 1;
-                    ctx.shadowBlur = 0;
-                }
-                
-                ctx.restore();
-            } else {
-                // Fallback
-                ctx.fillStyle = enemy.is_boss ? '#9b59b6' : '#e74c3c';
-                ctx.fillRect(enemyX * TILE_SIZE + 2, enemyY * TILE_SIZE + 2, 
-                            TILE_SIZE - 4, TILE_SIZE - 4);
-            }
-            
-            // HP bar
-            if (spriteRenderer) {
-                const hpPercent = enemy.hp / enemy.max_hp;
-                spriteRenderer.drawHPBar(
-                    ctx,
-                    enemyX * TILE_SIZE,
-                    enemyY * TILE_SIZE - 4,
-                    TILE_SIZE,
-                    hpPercent
-                );
-            } else {
-                const hpPercent = enemy.hp / enemy.max_hp;
-                ctx.fillStyle = '#2ecc71';
-                ctx.fillRect(enemyX * TILE_SIZE, enemyY * TILE_SIZE - 3, 
-                            TILE_SIZE * hpPercent, 2);
-            }
-        }
-    }
-    
-    // Draw death animations
-    for (const deathAnim of deathAnimations) {
-        const deathX = deathAnim.x - startX;
-        const deathY = deathAnim.y - startY;
-        
-        if (deathX >= 0 && deathX < VIEWPORT_WIDTH && 
-            deathY >= 0 && deathY < VIEWPORT_HEIGHT) {
-            
-            const deathSprite = deathAnim.isBoss ? sprites.enemyOrcDeath : sprites.enemySkeletonDeath;
-            if (sprites.loaded && deathSprite && deathSprite.complete) {
-                ctx.save();
-                ctx.imageSmoothingEnabled = false;
-                
-                // Skeleton: 8 frames of 96x64, Orc: 6 frames of 64x64
-                const frameWidth = deathAnim.isBoss ? 64 : 96;
-                const frameHeight = 64;
-                
-                // Align bottom of sprite with bottom of tile (like idle sprite)
-                const offsetX = (frameWidth - TILE_SIZE) / 2;  // Center horizontally
-                const offsetY = frameHeight - TILE_SIZE;  // Align bottom
-                
-                ctx.drawImage(
-                    deathSprite,
-                    deathAnim.frame * frameWidth, 0, frameWidth, frameHeight,  // Source
-                    deathX * TILE_SIZE - offsetX, deathY * TILE_SIZE - offsetY, frameWidth, frameHeight  // Dest: bottom-aligned
-                );
-                
-                ctx.restore();
-            } else {
-                // Fallback - draw red X if sprite not loaded
-                ctx.fillStyle = '#ff0000';
-                ctx.font = 'bold 24px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText('X', deathX * TILE_SIZE + TILE_SIZE/2, deathY * TILE_SIZE + TILE_SIZE/2 + 8);
-            }
-        }
-    }
-    
-    // Draw other players (multiplayer)
-    for (const [playerId, otherPlayer] of Object.entries(otherPlayers)) {
-        const otherX = otherPlayer.x - startX;
-        const otherY = otherPlayer.y - startY;
-        
-        if (otherX >= 0 && otherX < VIEWPORT_WIDTH && 
-            otherY >= 0 && otherY < VIEWPORT_HEIGHT) {
-            
-            // Draw other player sprite
-            if (sprites.loaded && sprites.playerIdle && sprites.playerIdle.complete) {
-                const frame = Math.floor(spriteRenderer.animationFrame / 3) % 4;
-                
-                ctx.save();
-                ctx.imageSmoothingEnabled = false;
-                
-                // Draw 64x64 sprite at original size, centered in 32x32 tile
-                ctx.drawImage(
-                    sprites.playerIdle,
-                    frame * 64, 0, 64, 64,  // Source: 64x64 per frame
-                    otherX * TILE_SIZE - 16, otherY * TILE_SIZE - 16, 64, 64  // Dest: 64x64 centered
-                );
-                
-                ctx.restore();
-            } else {
-                // Fallback - green square for other players
-                ctx.fillStyle = '#2ecc71';
-                ctx.fillRect(otherX * TILE_SIZE + 2, otherY * TILE_SIZE + 2, 
-                            TILE_SIZE - 4, TILE_SIZE - 4);
-                
-                ctx.fillStyle = '#fff';
-                ctx.fillRect(otherX * TILE_SIZE + 6, otherY * TILE_SIZE + 6, 
-                            4, 4);
-            }
-            
-            // Other player name tag
-            ctx.fillStyle = '#2ecc71';
-            ctx.font = 'bold 10px Arial';
-            ctx.textAlign = 'center';
-            ctx.shadowBlur = 3;
-            ctx.shadowColor = '#000';
-            ctx.fillText(otherPlayer.name || 'Player', 
-                         otherX * TILE_SIZE + TILE_SIZE/2, 
-                         otherY * TILE_SIZE - 4);
-            ctx.shadowBlur = 0;
-        }
-    }
-    
-    // Draw player
-    const playerX = Math.floor(VIEWPORT_WIDTH / 2);
-    const playerY = Math.floor(VIEWPORT_HEIGHT / 2);
-    
-    // Draw attack range indicator if player has ranged weapon
-    if (player.weapon && player.weapon.ranged) {
-        const weaponRange = player.weapon.range || 1;
-        ctx.strokeStyle = 'rgba(52, 152, 219, 0.3)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(
-            playerX * TILE_SIZE + TILE_SIZE / 2,
-            playerY * TILE_SIZE + TILE_SIZE / 2,
-            weaponRange * TILE_SIZE,
-            0,
-            Math.PI * 2
-        );
-        ctx.stroke();
-    }
-    
-    // Draw player sprite
-    // Hide sprite if attack animation is playing (check against actual player position)
-    const isAttacking = attackAnimations.some(anim => 
-        anim.type === 'pierce' && anim.fromX === player.x && anim.fromY === player.y
-    );
-    
-    // Only draw player sprite if not attacking
-    if (!isAttacking) {
-        if (sprites.loaded) {
-            // Choose sprite based on walking state
-            const useWalkSprite = isWalking && sprites.playerWalk && sprites.playerWalk.complete;
-            const playerSprite = useWalkSprite ? sprites.playerWalk : sprites.playerIdle;
-            
-            if (playerSprite && playerSprite.complete) {
-                ctx.save();
-                ctx.imageSmoothingEnabled = false;
-                
-                let frame;
-                if (useWalkSprite) {
-                    // Player walk: 384x64 = 6x1 sprite sheet (6 frames of 64x64 each)
-                    // Use walkFrameIndex - 1 frame per tile movement
-                    frame = walkFrameIndex;
-                } else {
-                    // Player idle: 256x64 = 4x1 sprite sheet (4 frames of 64x64 each)
-                    frame = Math.floor(spriteRenderer.animationFrame / 3) % 4; // 4 frames for idle
-                }
-                
-                // Draw 64x64 sprite at original size, centered in 32x32 tile
-                ctx.drawImage(
-                    playerSprite,
-                    frame * 64, 0, 64, 64,  // Source: 64x64 per frame
-                    playerX * TILE_SIZE - 16, playerY * TILE_SIZE - 16, 64, 64  // Dest: 64x64 centered
-                );
-                
-                ctx.restore();
-            } else {
-                // Fallback if sprites not loaded - bright visible square
-                ctx.fillStyle = '#3498db';
-                ctx.fillRect(playerX * TILE_SIZE + 2, playerY * TILE_SIZE + 2, 
-                            TILE_SIZE - 4, TILE_SIZE - 4);
-                
-                // Add white center dot for visibility
-                ctx.fillStyle = '#fff';
-                ctx.fillRect(playerX * TILE_SIZE + 6, playerY * TILE_SIZE + 6, 
-                            4, 4);
-            }
-        } else {
-            // Fallback if sprites not loaded - bright visible square
-            ctx.fillStyle = '#3498db';
-            ctx.fillRect(playerX * TILE_SIZE + 2, playerY * TILE_SIZE + 2, 
-                        TILE_SIZE - 4, TILE_SIZE - 4);
-            
-            // Add white center dot for visibility
-            ctx.fillStyle = '#fff';
-            ctx.fillRect(playerX * TILE_SIZE + 6, playerY * TILE_SIZE + 6, 
-                        4, 4);
-        }
-    }
-    // When attacking, nothing is drawn here - only the pierce animation shows
-    
-    // Player name tag and weapon info
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 10px Arial';
-    ctx.textAlign = 'center';
-    ctx.shadowBlur = 3;
-    ctx.shadowColor = '#000';
-    ctx.fillText(player.name, 
-                 playerX * TILE_SIZE + TILE_SIZE/2, 
-                 playerY * TILE_SIZE - 4);
-    
-    // Show weapon range if ranged
-    if (player.weapon && player.weapon.ranged) {
-        ctx.fillStyle = '#3498db';
-        ctx.font = '8px Arial';
-        ctx.fillText(`Range: ${player.weapon.range}`, 
-                     playerX * TILE_SIZE + TILE_SIZE/2, 
-                     playerY * TILE_SIZE + TILE_SIZE + 10);
-    }
-    ctx.shadowBlur = 0;
-    
-    // Render attack animations on top of everything
+    renderTiles(ctx, dungeon, viewport, sprites);
+    renderStairs(ctx, entities, viewport, sprites, spriteRenderer);
+    renderLootDrops(ctx, lootDrops, player, viewport, spriteRenderer);
+    renderDeathAnimations(ctx, deathAnimations, viewport, sprites);
+    renderEnemies(ctx, enemies, viewport, sprites, spriteRenderer);
+    renderOtherPlayers(ctx, otherPlayers, viewport, sprites, spriteRenderer);
+    renderPlayer(ctx, player, viewport, sprites, spriteRenderer, attackAnimations, isWalking, walkFrameIndex);
     renderAttackAnimations();
-    
-    // Debug mode: Draw tile boundaries
-    if (debugMode) {
-        ctx.strokeStyle = 'rgba(255, 255, 0, 0.3)';
-        ctx.lineWidth = 1;
-        for (let y = 0; y < VIEWPORT_HEIGHT; y++) {
-            for (let x = 0; x < VIEWPORT_WIDTH; x++) {
-                ctx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-            }
-        }
-        
-        // Draw coordinate labels
-        ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
-        ctx.font = '8px Arial';
-        ctx.textAlign = 'left';
-        ctx.fillText(`Player: (${player.x}, ${player.y})`, 5, 15);
-        ctx.fillText('Press F1 to toggle debug', 5, 30);
-    }
-    
-    // Render minimap
+    renderDebugInfo(ctx, player, debugMode);
     renderMinimap();
 }
 
@@ -1244,6 +926,7 @@ function updateHUD() {
     document.getElementById('player-name').textContent = player.name;
     document.getElementById('player-level').textContent = player.level;
     document.getElementById('current-floor').textContent = player.floor;
+    document.getElementById('player-gold').textContent = player.gold || 0;
     document.getElementById('player-hp').textContent = player.hp;
     document.getElementById('player-max-hp').textContent = player.max_hp;
     document.getElementById('player-xp').textContent = player.xp;
@@ -1280,6 +963,8 @@ function closeActiveModal() {
         document.getElementById('skills-modal').classList.remove('active');
     } else if (activeModal === 'inventory') {
         document.getElementById('inventory-modal').classList.remove('active');
+    } else if (activeModal === 'loot') {
+        document.getElementById('loot-modal').classList.remove('active');
     }
     activeModal = null;
     selectedIndex = 0;
@@ -1293,6 +978,8 @@ function navigateModal(direction) {
         items = document.querySelectorAll('.skill-item');
     } else if (activeModal === 'inventory') {
         items = document.querySelectorAll('.inventory-item');
+    } else if (activeModal === 'loot') {
+        items = document.querySelectorAll('.loot-item');
     }
     
     if (!items || items.length === 0) return;
@@ -1327,6 +1014,39 @@ function activateSelectedItem() {
             const button = selectedItem.querySelector('button');
             if (button && !button.disabled) {
                 button.click();
+            }
+        }
+    } else if (activeModal === 'loot') {
+        const items = document.querySelectorAll('.loot-item');
+        const selectedItem = items[selectedIndex];
+        if (selectedItem) {
+            const button = selectedItem.querySelector('button');
+            if (button && !button.disabled) {
+                button.click();
+            }
+        }
+    }
+}
+
+function discardSelectedItem() {
+    if (!activeModal) return;
+    
+    if (activeModal === 'inventory') {
+        const items = document.querySelectorAll('.inventory-item');
+        const selectedItem = items[selectedIndex];
+        if (selectedItem) {
+            const discardButton = selectedItem.querySelector('.btn-discard');
+            if (discardButton) {
+                discardButton.click();
+            }
+        }
+    } else if (activeModal === 'loot') {
+        const items = document.querySelectorAll('.loot-item');
+        const selectedItem = items[selectedIndex];
+        if (selectedItem) {
+            const discardButton = selectedItem.querySelector('.btn-discard');
+            if (discardButton) {
+                discardButton.click();
             }
         }
     }
@@ -1432,10 +1152,15 @@ function showInventoryModal() {
                     ${rangeText}
                     <p>Min Level: ${item.min_level || 1}</p>
                     ${item.lore ? `<p class="lore-text">${item.lore}</p>` : ''}
-                    <button class="btn-small" onclick="equipItem(${index})" 
-                            ${!canEquip ? 'disabled' : ''}>
-                        ${canEquip ? 'Equip' : 'Level Required'}
-                    </button>
+                    <div class="item-actions">
+                        <button class="btn-small" onclick="equipItem(${index})" 
+                                ${!canEquip ? 'disabled' : ''}>
+                            ${canEquip ? 'Equip' : 'Level Required'}
+                        </button>
+                        <button class="btn-small btn-discard" onclick="discardInventoryItem(${index})">
+                            Discard (X)
+                        </button>
+                    </div>
                 `;
             } else {
                 itemDiv.innerHTML = `
@@ -1443,10 +1168,15 @@ function showInventoryModal() {
                     <p>Defense: ${item.defense}</p>
                     <p>Min Level: ${item.min_level || 1}</p>
                     ${item.lore ? `<p class="lore-text">${item.lore}</p>` : ''}
-                    <button class="btn-small" onclick="equipItem(${index})" 
-                            ${!canEquip ? 'disabled' : ''}>
-                        ${canEquip ? 'Equip' : 'Level Required'}
-                    </button>
+                    <div class="item-actions">
+                        <button class="btn-small" onclick="equipItem(${index})" 
+                                ${!canEquip ? 'disabled' : ''}>
+                            ${canEquip ? 'Equip' : 'Level Required'}
+                        </button>
+                        <button class="btn-small btn-discard" onclick="discardInventoryItem(${index})">
+                            Discard (X)
+                        </button>
+                    </div>
                 `;
             }
             
@@ -1524,4 +1254,96 @@ function showLevelUpModal() {
         toast.classList.remove('show');
         setTimeout(() => toast.remove(), 300);
     }, 3000);
+}
+
+function showAreaLootModal() {
+    if (!player) return;
+    
+    // Find all loot within range
+    const nearbyLoot = lootDrops.filter(loot => {
+        const distance = Math.max(Math.abs(player.x - loot.x), Math.abs(player.y - loot.y));
+        return distance <= LOOT_RANGE;
+    });
+    
+    if (nearbyLoot.length === 0) {
+        // If modal is open and no loot remains, close it
+        if (activeModal === 'loot') {
+            closeActiveModal();
+            addLog('All loot collected!', 'loot');
+        } else {
+            addLog('No loot nearby!', 'loot');
+        }
+        return;
+    }
+    
+    const modal = document.getElementById('loot-modal');
+    const lootList = document.getElementById('loot-list');
+    
+    lootList.innerHTML = '';
+    
+    nearbyLoot.forEach((loot, index) => {
+        const lootDiv = document.createElement('div');
+        lootDiv.className = 'loot-item';
+        if (index === 0) lootDiv.classList.add('selected');
+        
+        const distance = Math.max(Math.abs(player.x - loot.x), Math.abs(player.y - loot.y));
+        
+        let itemsHtml = '';
+        if (loot.items && loot.items.length > 0) {
+            itemsHtml = '<div class="loot-items">';
+            loot.items.forEach(item => {
+                const rangedIcon = item.ranged ? ' 🏹' : (item.type === 'weapon' ? ' ⚔️' : ' 🛡️');
+                const rarityClass = item.rarity || 'common';
+                itemsHtml += `<div class="loot-item-detail rarity-${rarityClass}">${item.name}${rangedIcon}</div>`;
+            });
+            itemsHtml += '</div>';
+        }
+        
+        let rewardsHtml = '';
+        if (loot.gold > 0) {
+            rewardsHtml = '<div class="loot-rewards">';
+            rewardsHtml += `<span class="loot-gold">+${loot.gold} Gold</span>`;
+            rewardsHtml += '</div>';
+        }
+        
+        lootDiv.innerHTML = `
+            <h4>Loot at (${loot.x}, ${loot.y}) - ${distance} tiles away</h4>
+            ${itemsHtml}
+            ${rewardsHtml}
+            <div class="item-actions">
+                <button class="btn-small" onclick="pickupLoot('${loot.id}')">
+                    Pick Up
+                </button>
+                <button class="btn-small btn-discard" onclick="discardLoot('${loot.id}')">
+                    Discard (X)
+                </button>
+            </div>
+        `;
+        
+        lootList.appendChild(lootDiv);
+    });
+    
+    activeModal = 'loot';
+    selectedIndex = 0;
+    modal.classList.add('active');
+}
+
+function pickupLoot(lootId) {
+    socket.emit('pickup_loot', { loot_id: lootId });
+    // Don't close modal - let player continue picking up loot
+}
+
+function discardInventoryItem(index) {
+    const item = inventory[index];
+    if (confirm(`Discard ${item.name}? This cannot be undone.`)) {
+        inventory.splice(index, 1);
+        addLog(`Discarded ${item.name}`, 'loot');
+        showInventoryModal(); // Refresh the modal
+    }
+}
+
+function discardLoot(lootId) {
+    if (confirm('Discard this loot? This cannot be undone.')) {
+        socket.emit('discard_loot', { loot_id: lootId });
+    }
 }

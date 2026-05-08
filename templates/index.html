@@ -28,6 +28,7 @@
                     <h3 id="player-name">Adventurer</h3>
                     <div class="stat">Level: <span id="player-level">1</span></div>
                     <div class="stat">Floor: <span id="current-floor">1</span></div>
+                    <div class="stat">Gold: <span id="player-gold">0</span> 💰</div>
                 </div>
                 <div class="hud-section">
                     <div class="stat">HP: <span id="player-hp">100</span>/<span id="player-max-hp">100</span></div>
@@ -57,7 +58,7 @@
                 <div id="controls">
                     <p>Use WASD or Arrow Keys to move</p>
                     <p>Press P to attack closest enemy</p>
-                    <p>Press L to open skills | Press I to open inventory</p>
+                    <p>Press L to open skills | Press I to open inventory | Press F to loot</p>
                     <p>In modals: W/S to navigate | E to select | ESC to close</p>
                     <p>Press F1 to toggle debug mode</p>
                     <p>Ranged weapons can attack from distance 🏹</p>
@@ -110,8 +111,28 @@
                 <button id="level-up-ok" class="btn-primary">Continue</button>
             </div>
         </div>
+
+        <div id="loot-modal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2>💰 Area Loot (Range: 5 tiles)</h2>
+                <div id="loot-list"></div>
+            </div>
+        </div>
     </div>
 
+    <!-- Rendering modules -->
+    <script src="{{ url_for('static', filename='js/rendering/viewport.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/rendering/canvas-setup.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/rendering/tile-renderer.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/rendering/stairs-renderer.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/rendering/enemy-renderer.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/rendering/loot-renderer.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/rendering/animation-renderer.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/rendering/player-renderer.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/rendering/debug-renderer.js') }}"></script>
+    
+    <!-- Core game files -->
     <script src="{{ url_for('static', filename='js/sprite-renderer.js') }}"></script>
     <script src="{{ url_for('static', filename='js/game.js') }}"></script>
 </body>

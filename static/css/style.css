@@ -107,6 +107,26 @@ body {
     background: #2c3e50;
 }
 
+.btn-discard {
+    background: #c0392b !important;
+}
+
+.btn-discard:hover {
+    background: #a93226 !important;
+}
+
+.item-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.item-actions button {
+    flex: 1;
+    min-width: 100px;
+}
+
 /* Game Screen */
 #game-screen {
     display: grid;
@@ -397,8 +417,68 @@ body {
 
 /* Selected item in modals */
 .skill-item.selected,
-.inventory-item.selected {
+.inventory-item.selected,
+.loot-item.selected {
     border: 3px solid #3498db;
     background: rgba(52, 152, 219, 0.1);
     box-shadow: 0 0 15px rgba(52, 152, 219, 0.5);
+}
+
+/* Loot Modal Styles */
+#loot-modal .modal-content {
+    max-width: 700px;
+}
+
+.loot-item {
+    background: rgba(0,0,0,0.3);
+    padding: 1rem;
+    margin: 0.5rem 0;
+    border-radius: 8px;
+    border: 2px solid #f39c12;
+}
+
+.loot-item:hover {
+    border-color: #e67e22;
+    background: rgba(243, 156, 18, 0.1);
+}
+
+.loot-item h4 {
+    color: #f39c12;
+    margin-bottom: 0.75rem;
+    font-size: 1.1rem;
+}
+
+.loot-items {
+    margin: 0.5rem 0;
+}
+
+.loot-item-detail {
+    padding: 0.4rem 0.8rem;
+    margin: 0.3rem 0;
+    background: rgba(0,0,0,0.4);
+    border-radius: 4px;
+    border-left: 3px solid #f39c12;
+    font-weight: bold;
+}
+
+.loot-rewards {
+    display: flex;
+    gap: 1rem;
+    margin: 0.75rem 0;
+    font-size: 0.95rem;
+}
+
+.loot-xp {
+    color: #3498db;
+    font-weight: bold;
+}
+
+.loot-gold {
+    color: #f39c12;
+    font-weight: bold;
+}
+
+.loot-item button {
+    margin-top: 0.5rem;
+    width: 100%;
 }

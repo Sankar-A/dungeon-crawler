@@ -88,9 +88,8 @@ def calculate_combat(player, enemy):
     return result
 
 def generate_loot(enemy, player_level):
-    """Generate loot from defeated enemy"""
+    """Generate loot from defeated enemy (no XP - that's distributed separately)"""
     loot = {
-        'xp': enemy.level * 25,
         'gold': random.randint(10, 30) * enemy.level,
         'items': []
     }

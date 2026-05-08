@@ -32,6 +32,9 @@ class Player:
         self.weapon = None
         self.armor = None
         
+        # Currency
+        self.gold = 0
+        
         # Position
         self.x = 0
         self.y = 0
@@ -131,6 +134,7 @@ class Player:
             'skills': self.skills,
             'weapon': self.weapon,
             'armor': self.armor,
+            'gold': self.gold,
             'x': self.x,
             'y': self.y,
             'floor': self.floor

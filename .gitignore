@@ -10,9 +10,17 @@ ENV/
 *.db
 *.sqlite
 .DS_Store
+
+# Environment variables (NEVER COMMIT)
 .env
+.env.local
+.env.*.local
 
 # Sprite packs (keep extracted sprites, ignore source packs)
 sprites-pack/
 *.zip
 Pixel Crawler*.zip
+
+# Ignore .idea
+/.idea/
+inspect_cache.py
