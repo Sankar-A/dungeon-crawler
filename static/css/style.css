@@ -431,12 +431,12 @@ body {
     width: 100%;
     height: 100%;
     background: rgba(0,0,0,0.8);
+    justify-content: center;
+    align-items: center;
 }
 
 .modal.active {
     display: flex;
-    justify-content: center;
-    align-items: center;
 }
 
 .modal-content {
@@ -467,25 +467,86 @@ body {
     color: #f39c12;
 }
 
-.skill-item, .item-card {
+.skill-item, .skills-item, .skills-modal-item, .item-card, .inventory-item, .inventory-modal-item, .loot-modal-item, .equipped-item {
     background: rgba(0,0,0,0.3);
     padding: 1rem;
     margin: 0.5rem 0;
     border-radius: 8px;
     border: 1px solid #555;
+    cursor: pointer;
+    transition: all 0.2s;
 }
 
-.skill-item:hover, .item-card:hover {
+.skill-item:hover, .skills-item:hover, .skills-modal-item:hover, .item-card:hover, .inventory-item:hover, .inventory-modal-item:hover, .loot-modal-item:hover {
     border-color: #f39c12;
 }
 
-.skill-item h4, .item-card h4 {
+/* Equipped items should not be hoverable/selectable */
+.equipped-item {
+    cursor: default;
+    opacity: 0.8;
+}
+
+.equipped-item:hover {
+    border-color: #555;
+}
+
+.skill-item h4, .skills-item h4, .skills-modal-item h4, .item-card h4, .inventory-item h4, .inventory-modal-item h4, .loot-modal-item h4 {
     color: #f39c12;
     margin-bottom: 0.5rem;
 }
 
-.skill-item button, .item-card button {
+.skill-item button, .skills-item button, .skills-modal-item button, .item-card button, .inventory-item button, .inventory-modal-item button, .loot-modal-item button {
     margin-top: 0.5rem;
+    padding: 0.6rem 1.2rem;
+    font-size: 0.95rem;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.2s;
+    margin-right: 0.5rem;
+}
+
+.skill-item button:last-child, .skills-item button:last-child, .skills-modal-item button:last-child, .item-card button:last-child, .inventory-item button:last-child, .inventory-modal-item button:last-child, .loot-modal-item button:last-child {
+    margin-right: 0;
+}
+
+/* Primary action buttons (Upgrade, Equip, Pick Up) */
+.skill-item button:first-of-type, .skills-item button:first-of-type, .skills-modal-item button:first-of-type, .inventory-item button:first-of-type, .inventory-modal-item button:first-of-type, .loot-modal-item button:first-of-type {
+    background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+    color: white;
+}
+
+.skill-item button:first-of-type:hover, .skills-item button:first-of-type:hover, .skills-modal-item button:first-of-type:hover, .inventory-item button:first-of-type:hover, .inventory-modal-item button:first-of-type:hover, .loot-modal-item button:first-of-type:hover {
+    background: linear-gradient(135deg, #229954 0%, #1e8449 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(39, 174, 96, 0.3);
+}
+
+/* Secondary action buttons (Discard) */
+.skill-item button:nth-of-type(2), .skills-item button:nth-of-type(2), .skills-modal-item button:nth-of-type(2), .inventory-item button:nth-of-type(2), .inventory-modal-item button:nth-of-type(2), .loot-modal-item button:nth-of-type(2) {
+    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    color: white;
+}
+
+.skill-item button:nth-of-type(2):hover, .skills-item button:nth-of-type(2):hover, .skills-modal-item button:nth-of-type(2):hover, .inventory-item button:nth-of-type(2):hover, .inventory-modal-item button:nth-of-type(2):hover, .loot-modal-item button:nth-of-type(2):hover {
+    background: linear-gradient(135deg, #c0392b 0%, #a93226 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(231, 76, 60, 0.3);
+}
+
+/* Disabled buttons */
+.skill-item button:disabled, .skills-item button:disabled, .skills-modal-item button:disabled, .item-card button:disabled, .inventory-item button:disabled, .inventory-modal-item button:disabled, .loot-modal-item button:disabled {
+    background: #555 !important;
+    color: #888 !important;
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.skill-item button:disabled:hover, .skills-item button:disabled:hover, .skills-modal-item button:disabled:hover, .item-card button:disabled:hover, .inventory-item button:disabled:hover, .inventory-modal-item button:disabled:hover, .loot-modal-item button:disabled:hover {
+    transform: none;
+    box-shadow: none;
 }
 
 .rarity-common { color: #bbb; }
@@ -584,8 +645,12 @@ body {
 
 /* Selected item in modals */
 .skill-item.selected,
+.skills-item.selected,
+.skills-modal-item.selected,
 .inventory-item.selected,
-.loot-item.selected {
+.inventory-modal-item.selected,
+.loot-item.selected,
+.loot-modal-item.selected {
     border: 3px solid #3498db;
     background: rgba(52, 152, 219, 0.1);
     box-shadow: 0 0 15px rgba(52, 152, 219, 0.5);

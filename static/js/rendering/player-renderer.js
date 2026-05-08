@@ -54,15 +54,22 @@ function renderPlayer(ctx, player, viewport, sprites, spriteRenderer, attackAnim
         renderWeaponRange(ctx, playerX, playerY, player.weapon.range);
     }
     
-    // Check if attacking
+    // Check if attacking with pierce (melee)
     const isAttacking = attackAnimations.some(anim => 
         anim.type === 'pierce' && anim.fromX === player.x && anim.fromY === player.y
     );
     
+    if (isAttacking) {
+        console.log('Player is attacking with pierce - hiding player sprite');
+    }
+    
+    // Always render player sprite unless doing pierce attack (pierce sprite replaces player)
     if (!isAttacking) {
         renderPlayerSprite(ctx, playerX, playerY, player, sprites, spriteRenderer, isWalking, walkFrameIndex);
-        renderPlayerInfo(ctx, playerX, playerY, player);
     }
+    
+    // Always render player info
+    renderPlayerInfo(ctx, playerX, playerY, player);
 }
 
 function renderWeaponRange(ctx, playerX, playerY, range) {

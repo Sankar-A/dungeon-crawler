@@ -29,6 +29,14 @@ def register_character_handlers(socketio):
             emit('character_creation_failed', {'reason': 'Character name must be 1-10 characters'})
             return
         
+        # Guest mode - skip database operations
+        if user.get('is_guest'):
+            # Create new player object directly
+            player = Player(player_id, name, user['id'])
+            players[player_id] = player
+            start_game(player_id, player)
+            return
+        
         # Check if character already exists - if so, load it instead
         if db.enabled:
             existing_chars = db.get_user_characters(user['id'])
@@ -67,6 +75,11 @@ def register_character_handlers(socketio):
         
         if not character_name:
             emit('delete_failed', {'reason': 'Character name required'})
+            return
+        
+        # Guest mode - cannot delete (no saved characters)
+        if user.get('is_guest'):
+            emit('delete_failed', {'reason': 'Guest mode - no saved characters'})
             return
         
         success = db.delete_character(user['id'], character_name)

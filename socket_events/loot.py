@@ -38,6 +38,10 @@ def register_loot_handlers(socketio):
         # Give loot to player
         player.gold += loot['gold']
         
+        # Add items to player's inventory
+        for item in loot['items']:
+            player.inventory.append(item)
+        
         # Remove loot from global drops and cache
         del loot_drops[loot_id]
         delete_loot_drop(loot_id)

@@ -177,7 +177,10 @@ def register_game_handlers(socketio):
         skill_name = data.get('skill')
         
         if player.upgrade_skill(skill_name):
+            save_player_data(player)
             emit('skill_upgraded', {'player': player.to_dict()})
+        else:
+            emit('skill_upgrade_failed', {'reason': 'Cannot upgrade skill'})
 
     @socketio.on('equip_item')
     def handle_equip(data):
@@ -192,9 +195,26 @@ def register_game_handlers(socketio):
             emit('equip_failed', {'reason': 'Level requirement not met'})
             return
         
+        # Find and remove item from inventory
+        item_found = False
+        for i, inv_item in enumerate(player.inventory):
+            if inv_item.get('name') == item.get('name') and inv_item.get('type') == item.get('type'):
+                player.inventory.pop(i)
+                item_found = True
+                break
+        
+        if not item_found:
+            emit('equip_failed', {'reason': 'Item not in inventory'})
+            return
+        
+        # Unequip current item and add to inventory
         if item['type'] == 'weapon':
+            if player.weapon:
+                player.inventory.append(player.weapon)
             player.weapon = item
         elif item['type'] == 'armor':
+            if player.armor:
+                player.inventory.append(player.armor)
             player.armor = item
         
         # Save player data after equipping

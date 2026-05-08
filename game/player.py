@@ -33,6 +33,9 @@ class Player:
         self.weapon = None
         self.armor = None
         
+        # Inventory
+        self.inventory = []
+        
         # Currency
         self.gold = 0
         
@@ -71,10 +74,15 @@ class Player:
     
     def upgrade_skill(self, skill_name):
         """Upgrade a skill if player has points"""
-        if skill_name in self.skills and self.skill_points > 0:
+        if self.skill_points <= 0:
+            return False
+        
+        # Check if it's a skill
+        if skill_name in self.skills:
             self.skills[skill_name] += 1
             self.skill_points -= 1
             return True
+        
         return False
     
     def calculate_damage(self):
@@ -136,6 +144,7 @@ class Player:
             'skills': self.skills,
             'weapon': self.weapon,
             'armor': self.armor,
+            'inventory': self.inventory,
             'gold': self.gold,
             'x': self.x,
             'y': self.y,

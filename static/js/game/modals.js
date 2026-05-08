@@ -2,19 +2,22 @@
 function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
-        modal.style.display = 'none';
+        modal.classList.remove('active');
         activeModal = null;
         selectedIndex = 0;
     }
 }
 
 function navigateModal(direction) {
-    if (!activeModal) return;
+    if (!activeModal || confirmationModalOpen) return; // Don't navigate if confirmation is open
     
     let items = document.querySelectorAll(`.${activeModal}-item`);
     if (items.length === 0) return;
     
-    items[selectedIndex].classList.remove('selected');
+    // Remove selected class from current item
+    if (items[selectedIndex]) {
+        items[selectedIndex].classList.remove('selected');
+    }
     
     selectedIndex += direction;
     if (selectedIndex < 0) selectedIndex = items.length - 1;
@@ -24,36 +27,79 @@ function navigateModal(direction) {
     items[selectedIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
-function selectModalItem() {
-    if (!activeModal) return;
+function selectModalItemPositive() {
+    if (!activeModal || confirmationModalOpen) return; // Don't select if confirmation is open
     
     let items = document.querySelectorAll(`.${activeModal}-item`);
     if (items.length === 0 || selectedIndex >= items.length) return;
     
-    items[selectedIndex].click();
+    console.log('E pressed - activeModal:', activeModal, 'selectedIndex:', selectedIndex);
+    
+    // Find the first button (positive action: upgrade, equip, pickup)
+    const button = items[selectedIndex].querySelector('button:not([disabled])');
+    if (button) {
+        console.log('Clicking first button:', button.textContent);
+        button.click();
+    }
 }
 
-function showSkillsModal() {
+function selectModalItemNegative() {
+    if (!activeModal || confirmationModalOpen) return; // Don't select if confirmation is open
+    
+    let items = document.querySelectorAll(`.${activeModal}-item`);
+    if (items.length === 0 || selectedIndex >= items.length) return;
+    
+    console.log('X pressed - activeModal:', activeModal, 'selectedIndex:', selectedIndex);
+    
+    // Find all buttons and click the second one (negative action: discard)
+    const buttons = items[selectedIndex].querySelectorAll('button:not([disabled])');
+    
+    console.log('Found', buttons.length, 'button(s):', Array.from(buttons).map(b => b.textContent));
+    
+    // Only click if there are at least 2 buttons (positive and negative actions)
+    if (buttons.length >= 2) {
+        console.log('Clicking second button:', buttons[1].textContent);
+        buttons[1].click();
+    } else {
+        console.log('X pressed but only', buttons.length, 'button(s) found - ignoring');
+    }
+}
+
+function showSkillsModal(preserveSelection = false) {
     if (!player) return;
     
     const modal = document.getElementById('skills-modal');
     const list = document.getElementById('skills-list');
     const pointsSpan = document.getElementById('modal-skill-points');
     
+    // Save current selection if preserving
+    const currentSelection = preserveSelection ? selectedIndex : 0;
+    
     list.innerHTML = '';
     pointsSpan.textContent = player.skill_points;
     
-    const skills = ['strength', 'dexterity', 'intelligence', 'vitality'];
+    // Define skills with descriptions
+    const skills = [
+        { key: 'power_strike', name: 'Power Strike', desc: '+5 damage per level' },
+        { key: 'quick_reflexes', name: 'Quick Reflexes', desc: '+3% dodge chance per level' },
+        { key: 'arcane_knowledge', name: 'Arcane Knowledge', desc: 'Magic damage bonus' },
+        { key: 'iron_skin', name: 'Iron Skin', desc: '+3 defense per level' },
+        { key: 'critical_eye', name: 'Critical Eye', desc: '+5% crit chance per level' },
+        { key: 'life_drain', name: 'Life Drain', desc: '+10% lifesteal per level' }
+    ];
     
     skills.forEach((skill, index) => {
-        const level = player.skills[skill] || 0;
+        const level = player.skills[skill.key] || 0;
         const skillDiv = document.createElement('div');
-        skillDiv.className = 'skills-item skill-item';
-        if (index === 0) skillDiv.classList.add('selected');
+        skillDiv.className = 'skills-modal-item skill-item';
+        if (index === currentSelection) skillDiv.classList.add('selected');
         
         skillDiv.innerHTML = `
-            <span>${skill.charAt(0).toUpperCase() + skill.slice(1)}: ${level}</span>
-            <button onclick="upgradeSkill('${skill}')" ${player.skill_points === 0 ? 'disabled' : ''}>
+            <div>
+                <strong>${skill.name}</strong>: Level ${level}
+                <div style="font-size: 0.85rem; color: #bbb; margin-top: 0.25rem;">${skill.desc}</div>
+            </div>
+            <button onclick="upgradeSkill('${skill.key}')" ${player.skill_points === 0 ? 'disabled' : ''}>
                 Upgrade (+1)
             </button>
         `;
@@ -61,24 +107,27 @@ function showSkillsModal() {
         list.appendChild(skillDiv);
     });
     
-    activeModal = 'skills';
-    selectedIndex = 0;
-    modal.style.display = 'block';
+    activeModal = 'skills-modal';
+    selectedIndex = currentSelection;
+    modal.classList.add('active');
 }
 
-function showInventoryModal() {
+function showInventoryModal(preserveSelection = false) {
     if (!player) return;
     
     const modal = document.getElementById('inventory-modal');
     const equipped = document.getElementById('equipped-items');
     const items = document.getElementById('inventory-items');
     
+    // Save current selection if preserving
+    const currentSelection = preserveSelection ? Math.min(selectedIndex, inventory.length - 1) : 0;
+    
     equipped.innerHTML = '<h3>Equipped</h3>';
     items.innerHTML = '<h3>Inventory</h3>';
     
     if (player.weapon) {
         const weaponDiv = document.createElement('div');
-        weaponDiv.className = 'inventory-item';
+        weaponDiv.className = 'equipped-item'; // Changed class to avoid selection
         weaponDiv.innerHTML = `
             <strong>${player.weapon.name}</strong>
             <div>Damage: ${player.weapon.damage}</div>
@@ -89,7 +138,7 @@ function showInventoryModal() {
     
     if (player.armor) {
         const armorDiv = document.createElement('div');
-        armorDiv.className = 'inventory-item';
+        armorDiv.className = 'equipped-item'; // Changed class to avoid selection
         armorDiv.innerHTML = `
             <strong>${player.armor.name}</strong>
             <div>Defense: ${player.armor.defense}</div>
@@ -99,10 +148,14 @@ function showInventoryModal() {
     
     if (inventory.length === 0) {
         items.innerHTML += '<p>No items in inventory</p>';
+        selectedIndex = 0;
     } else {
         inventory.forEach((item, index) => {
             const itemDiv = document.createElement('div');
-            itemDiv.className = 'inventory-item';
+            itemDiv.className = 'inventory-modal-item inventory-item';
+            if (index === currentSelection) {
+                itemDiv.classList.add('selected');
+            }
             itemDiv.innerHTML = `
                 <strong>${item.name}</strong>
                 <div>${item.type === 'weapon' ? `Damage: ${item.damage}` : `Defense: ${item.defense}`}</div>
@@ -111,16 +164,21 @@ function showInventoryModal() {
             `;
             items.appendChild(itemDiv);
         });
+        selectedIndex = currentSelection;
     }
     
-    modal.style.display = 'block';
+    activeModal = 'inventory-modal';
+    modal.classList.add('active');
 }
 
-function showAreaLootModal() {
+function showAreaLootModal(preserveSelection = false) {
     if (!player) return;
     
     const modal = document.getElementById('loot-modal');
     const list = document.getElementById('loot-list');
+    
+    // Save current selection if preserving
+    const currentSelection = preserveSelection ? selectedIndex : 0;
     
     list.innerHTML = '';
     
@@ -136,9 +194,14 @@ function showAreaLootModal() {
     if (nearbyLoot.length === 0) {
         list.innerHTML = '<p>No loot nearby (within 5 tiles)</p>';
     } else {
+        // Adjust selection if it's out of bounds
+        const adjustedSelection = Math.min(currentSelection, nearbyLoot.length - 1);
+        
         nearbyLoot.forEach((loot, index) => {
             const lootDiv = document.createElement('div');
-            lootDiv.className = 'loot-item';
+            lootDiv.className = 'loot-modal-item loot-item';
+            if (index === adjustedSelection) lootDiv.classList.add('selected');
+            
             const distance = Math.max(
                 Math.abs(player.x - loot.x),
                 Math.abs(player.y - loot.y)
@@ -154,9 +217,12 @@ function showAreaLootModal() {
             
             list.appendChild(lootDiv);
         });
+        
+        selectedIndex = adjustedSelection;
     }
     
-    modal.style.display = 'block';
+    activeModal = 'loot-modal';
+    modal.classList.add('active');
 }
 
 function showLoreModal(title, items) {
@@ -183,17 +249,35 @@ function showLoreModal(title, items) {
         content.appendChild(itemDiv);
     });
     
-    modal.style.display = 'block';
+    modal.classList.add('active');
 }
 
 function showLevelUpModal(newLevel) {
     const modal = document.getElementById('level-up-modal');
+    const okBtn = document.getElementById('level-up-ok');
     document.getElementById('new-level').textContent = newLevel;
-    modal.style.display = 'block';
+    modal.classList.add('active');
     
-    document.getElementById('level-up-ok').onclick = () => {
-        modal.style.display = 'none';
+    // Remove old listener
+    const newOkBtn = okBtn.cloneNode(true);
+    okBtn.parentNode.replaceChild(newOkBtn, okBtn);
+    
+    const closeModal = () => {
+        modal.classList.remove('active');
+        document.removeEventListener('keydown', keyHandler);
     };
+    
+    newOkBtn.onclick = closeModal;
+    
+    // Keyboard shortcut: E or Enter to continue
+    const keyHandler = (e) => {
+        const key = e.key.toLowerCase();
+        if (key === 'e' || key === 'enter' || key === 'escape') {
+            e.preventDefault();
+            closeModal();
+        }
+    };
+    document.addEventListener('keydown', keyHandler);
 }
 
 function upgradeSkill(skillName) {
@@ -217,7 +301,14 @@ function discardInventoryItem(index) {
         () => {
             inventory.splice(index, 1);
             addLog(`Discarded ${item.name}`, 'loot');
-            showInventoryModal();
+            
+            // Adjust selectedIndex if needed
+            if (selectedIndex >= inventory.length) {
+                selectedIndex = Math.max(0, inventory.length - 1);
+            }
+            
+            // Refresh the modal, preserving selection
+            showInventoryModal(true);
         }
     );
 }

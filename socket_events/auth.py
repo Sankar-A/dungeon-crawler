@@ -5,6 +5,9 @@ from flask import request
 from flask_socketio import emit
 from game_state import authenticated_users
 from database import db
+import logging
+
+logger = logging.getLogger(__name__)
 
 def register_auth_handlers(socketio):
     """Register authentication-related socket handlers"""
@@ -14,6 +17,21 @@ def register_auth_handlers(socketio):
         """Register a new user account"""
         username = data.get('username', '').strip()
         password = data.get('password', '')
+        
+        # Check if database is disabled - use guest mode
+        if not db.enabled:
+            logger.info(f"Database disabled - creating guest user: {username}")
+            guest_user = {
+                'id': f'guest_{request.sid}',
+                'username': username,
+                'created_at': None,
+                'last_login': None,
+                'character_count': 0,
+                'is_guest': True
+            }
+            authenticated_users[request.sid] = guest_user
+            emit('register_success', {'user': guest_user, 'guest_mode': True})
+            return
         
         # Validation
         if not username or len(username) < 3 or len(username) > 50:
@@ -40,6 +58,25 @@ def register_auth_handlers(socketio):
         """Login with username and password"""
         username = data.get('username', '').strip()
         password = data.get('password', '')
+        
+        # Check if database is disabled - use guest mode
+        if not db.enabled:
+            logger.info(f"Database disabled - creating guest user: {username}")
+            guest_user = {
+                'id': f'guest_{request.sid}',
+                'username': username,
+                'created_at': None,
+                'last_login': None,
+                'character_count': 0,
+                'is_guest': True
+            }
+            authenticated_users[request.sid] = guest_user
+            emit('login_success', {
+                'user': guest_user,
+                'characters': [],
+                'guest_mode': True
+            })
+            return
         
         if not username or not password:
             emit('login_failed', {'reason': 'Username and password required'})
@@ -72,6 +109,12 @@ def register_auth_handlers(socketio):
             return
         
         user = authenticated_users[session_id]
+        
+        # Guest mode - return empty list
+        if user.get('is_guest'):
+            emit('characters_list', {'characters': [], 'guest_mode': True})
+            return
+        
         characters = db.get_user_characters(user['id'])
         
         emit('characters_list', {'characters': characters})

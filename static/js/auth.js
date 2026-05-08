@@ -1,6 +1,7 @@
 // Authentication state
 let currentUser = null;
 let userCharacters = [];
+let confirmationModalOpen = false; // Track if confirmation modal is open
 
 // Confirmation modal handler
 function showConfirmation(title, message, onConfirm) {
@@ -12,7 +13,8 @@ function showConfirmation(title, message, onConfirm) {
     
     titleEl.textContent = title;
     messageEl.textContent = message;
-    modal.style.display = 'block';
+    modal.classList.add('active');
+    confirmationModalOpen = true; // Set flag
     
     // Remove old listeners
     const newYesBtn = yesBtn.cloneNode(true);
@@ -20,24 +22,35 @@ function showConfirmation(title, message, onConfirm) {
     yesBtn.parentNode.replaceChild(newYesBtn, yesBtn);
     noBtn.parentNode.replaceChild(newNoBtn, noBtn);
     
+    const closeModal = () => {
+        modal.classList.remove('active');
+        confirmationModalOpen = false; // Clear flag
+        document.removeEventListener('keydown', keyHandler);
+    };
+    
     // Add new listeners
     newYesBtn.addEventListener('click', () => {
-        modal.style.display = 'none';
+        closeModal();
         if (onConfirm) onConfirm();
     });
     
     newNoBtn.addEventListener('click', () => {
-        modal.style.display = 'none';
+        closeModal();
     });
     
-    // Close on escape
-    const escHandler = (e) => {
-        if (e.key === 'Escape') {
-            modal.style.display = 'none';
-            document.removeEventListener('keydown', escHandler);
+    // Keyboard shortcuts: E/Enter for Yes, X/Escape for No
+    const keyHandler = (e) => {
+        const key = e.key.toLowerCase();
+        if (key === 'e' || key === 'enter') {
+            e.preventDefault();
+            closeModal();
+            if (onConfirm) onConfirm();
+        } else if (key === 'x' || key === 'escape') {
+            e.preventDefault();
+            closeModal();
         }
     };
-    document.addEventListener('keydown', escHandler);
+    document.addEventListener('keydown', keyHandler);
 }
 
 // Alert modal handler (uses confirmation modal with only OK button)
@@ -50,7 +63,7 @@ function showAlert(title, message) {
     
     titleEl.textContent = title;
     messageEl.textContent = message;
-    modal.style.display = 'block';
+    modal.classList.add('active');
     
     // Hide No button, show only Yes as OK
     noBtn.style.display = 'none';
@@ -62,21 +75,23 @@ function showAlert(title, message) {
     
     // Add new listener
     newYesBtn.addEventListener('click', () => {
-        modal.style.display = 'none';
+        modal.classList.remove('active');
         noBtn.style.display = 'block';
         yesBtn.textContent = 'Yes';
+        document.removeEventListener('keydown', keyHandler);
     });
     
-    // Close on escape
-    const escHandler = (e) => {
-        if (e.key === 'Escape') {
-            modal.style.display = 'none';
+    // Close on escape or enter
+    const keyHandler = (e) => {
+        if (e.key === 'Escape' || e.key === 'Enter' || e.key.toLowerCase() === 'e') {
+            e.preventDefault();
+            modal.classList.remove('active');
             noBtn.style.display = 'block';
             yesBtn.textContent = 'Yes';
-            document.removeEventListener('keydown', escHandler);
+            document.removeEventListener('keydown', keyHandler);
         }
     };
-    document.addEventListener('keydown', escHandler);
+    document.addEventListener('keydown', keyHandler);
 }
 
 // Screen management
@@ -197,6 +212,12 @@ function setupAuthSocketHandlers() {
     socket.on('register_success', (data) => {
         currentUser = data.user;
         userCharacters = [];
+        
+        // Show guest mode indicator if applicable
+        if (data.guest_mode) {
+            showAlert('Guest Mode', 'Database is disabled. Playing in guest mode - progress will not be saved.');
+        }
+        
         showScreen('character-select-screen');
         renderCharacterList();
     });
@@ -208,6 +229,12 @@ function setupAuthSocketHandlers() {
     socket.on('login_success', (data) => {
         currentUser = data.user;
         userCharacters = data.characters;
+        
+        // Show guest mode indicator if applicable
+        if (data.guest_mode) {
+            showAlert('Guest Mode', 'Database is disabled. Playing in guest mode - progress will not be saved.');
+        }
+        
         showScreen('character-select-screen');
         renderCharacterList();
     });

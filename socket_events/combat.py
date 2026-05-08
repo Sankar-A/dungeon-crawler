@@ -114,7 +114,8 @@ def register_combat_handlers(socketio):
             # Send combat result to attacker
             emit('combat_result', {
                 'result': result,
-                'player': player.to_dict()
+                'player': player.to_dict(),
+                'enemy_id': enemy_id
             })
             
             # Broadcast enemy HP update to all players in the room

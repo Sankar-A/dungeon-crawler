@@ -6,6 +6,8 @@ function setupSocketHandlers() {
         entities = data.entities;
         enemies = data.enemies;
         otherPlayers = data.other_players || {};
+        inventory = player.inventory || [];
+        lootDrops = {};
         
         document.getElementById('start-screen').classList.remove('active');
         document.getElementById('login-screen').classList.remove('active');
@@ -38,6 +40,8 @@ function setupSocketHandlers() {
         if (data.player_id === socket.id) {
             player.x = data.x;
             player.y = data.y;
+            // Don't stop walking here - let keyup handler control it
+            // This allows walk animation to continue while keys are held
         } else {
             if (otherPlayers[data.player_id]) {
                 otherPlayers[data.player_id].x = data.x;
@@ -50,6 +54,17 @@ function setupSocketHandlers() {
     socket.on('combat_result', (data) => {
         const result = data.result;
         player = data.player;
+        const enemyId = data.enemy_id;
+        
+        console.log('Combat result received:', result, 'enemy_id:', enemyId);
+        
+        // Create attack animation
+        if (enemyId && enemies[enemyId]) {
+            const enemy = enemies[enemyId];
+            const isRanged = player.weapon && player.weapon.ranged;
+            console.log('Creating attack animation - isRanged:', isRanged, 'weapon:', player.weapon);
+            createAttackAnimation(player.x, player.y, enemy.x, enemy.y, isRanged);
+        }
         
         addLog(`You dealt ${result.player_damage} damage!`, 'combat');
         if (result.enemy_damage > 0) {
@@ -61,6 +76,12 @@ function setupSocketHandlers() {
     });
     
     socket.on('enemy_defeated', (data) => {
+        // Create death animation
+        if (enemies[data.enemy_id]) {
+            const enemy = enemies[data.enemy_id];
+            createDeathAnimation(enemy.x, enemy.y, enemy.is_boss);
+        }
+        
         delete enemies[data.enemy_id];
         
         if (data.loot_drop) {
@@ -118,13 +139,14 @@ function setupSocketHandlers() {
     socket.on('skill_upgraded', (data) => {
         player = data.player;
         updateHUD();
-        showSkillsModal();
+        showSkillsModal(true);
     });
     
     socket.on('item_equipped', (data) => {
         player = data.player;
+        inventory = player.inventory || [];
         updateHUD();
-        showInventoryModal();
+        showInventoryModal(true); // Preserve selection after equipping
     });
     
     socket.on('loot_picked_up', (data) => {
@@ -132,9 +154,30 @@ function setupSocketHandlers() {
         
         if (data.player_id === socket.id) {
             player = data.player;
+            inventory = player.inventory || [];
             addLog(`Picked up ${data.gold} gold!`, 'loot');
             for (const item of data.items) {
                 addLog(`Found: ${item.name}!`, 'loot');
+            }
+            
+            // Refresh loot modal if it's open
+            if (activeModal === 'loot-modal') {
+                const nearbyLoot = Object.values(lootDrops).filter(loot => {
+                    if (loot.floor !== player.floor) return false;
+                    const distance = Math.max(
+                        Math.abs(player.x - loot.x),
+                        Math.abs(player.y - loot.y)
+                    );
+                    return distance <= 5;
+                });
+                
+                if (nearbyLoot.length > 0) {
+                    // Refresh modal without closing, preserve selection
+                    showAreaLootModal(true);
+                } else {
+                    // Close if no more loot
+                    closeModal('loot-modal');
+                }
             }
         }
         
@@ -144,6 +187,27 @@ function setupSocketHandlers() {
     
     socket.on('loot_discarded', (data) => {
         delete lootDrops[data.loot_id];
+        
+        // Refresh loot modal if it's open
+        if (activeModal === 'loot-modal') {
+            const nearbyLoot = Object.values(lootDrops).filter(loot => {
+                if (loot.floor !== player.floor) return false;
+                const distance = Math.max(
+                    Math.abs(player.x - loot.x),
+                    Math.abs(player.y - loot.y)
+                );
+                return distance <= 5;
+            });
+            
+            if (nearbyLoot.length > 0) {
+                // Refresh modal without closing, preserve selection
+                showAreaLootModal(true);
+            } else {
+                // Close if no more loot
+                closeModal('loot-modal');
+            }
+        }
+        
         renderDungeon();
     });
     
