@@ -24,3 +24,4 @@ Pixel Crawler*.zip
 # Ignore .idea
 /.idea/
 inspect_cache.py
+check_db.py

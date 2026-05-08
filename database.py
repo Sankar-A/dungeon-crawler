@@ -22,6 +22,7 @@ class User(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String(50), unique=True, nullable=False, index=True)
+    username_lower = Column(String(50), unique=True, nullable=False, index=True)  # For case-insensitive lookups
     password_hash = Column(String(255), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     last_login = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -168,8 +169,11 @@ class Database:
                     Base.metadata.create_all(self.engine)
                     logger.info("Database schema initialized successfully")
                     
+                    # Run migration for username_lower column if needed
+                    self._migrate_username_lower()
+                    
                     if self.is_dev:
-                        print(f"[DEV] Database initialized (operations will be simulated)")
+                        print(f"[DEV] Database initialized")
                     else:
                         logger.info("Database initialized successfully")
                 except Exception as schema_error:
@@ -196,6 +200,51 @@ class Database:
         if not self.enabled:
             return None
         return self.Session()
+    
+    def _migrate_username_lower(self):
+        """Migrate existing users table to add username_lower column"""
+        try:
+            from sqlalchemy import text
+            session = self.get_session()
+            
+            # Check if column already exists
+            result = session.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name='users' AND column_name='username_lower'
+            """))
+            
+            if result.fetchone():
+                session.close()
+                return  # Column already exists
+            
+            logger.info("Migrating users table: adding username_lower column...")
+            
+            # Add the column
+            session.execute(text("ALTER TABLE users ADD COLUMN username_lower VARCHAR(50)"))
+            
+            # Populate with lowercase usernames
+            session.execute(text("UPDATE users SET username_lower = LOWER(username)"))
+            
+            # Make it NOT NULL
+            session.execute(text("ALTER TABLE users ALTER COLUMN username_lower SET NOT NULL"))
+            
+            # Add unique constraint
+            session.execute(text("ALTER TABLE users ADD CONSTRAINT users_username_lower_key UNIQUE (username_lower)"))
+            
+            # Add index
+            session.execute(text("CREATE INDEX IF NOT EXISTS ix_users_username_lower ON users (username_lower)"))
+            
+            session.commit()
+            session.close()
+            
+            logger.info("Migration completed: username_lower column added successfully")
+            
+        except Exception as e:
+            logger.warning(f"Migration skipped or failed (may already be applied): {e}")
+            if session:
+                session.rollback()
+                session.close()
     
     def save_player(self, player_obj):
         """Save or update player data"""
@@ -316,30 +365,38 @@ class Database:
         if not self.enabled:
             return None
         
-        if self.is_dev:
-            print(f"[DEV] DB CREATE USER: {username}")
-            return {'id': 1, 'username': username}  # Simulate success in dev
-        
         try:
             session = self.get_session()
             
-            # Check if username exists
-            existing = session.query(User).filter_by(username=username).first()
+            # Normalize username for case-insensitive check
+            username_lower = username.lower()
+            
+            # Check if username exists (case-insensitive)
+            existing = session.query(User).filter_by(username_lower=username_lower).first()
             if existing:
                 session.close()
+                if self.is_dev:
+                    print(f"[DEV] DB CREATE USER FAILED: {username} already exists (found as '{existing.username}')")
+                logger.info(f"Registration failed: username '{username}' already taken")
                 return None
             
             # Create user
-            user = User(username=username)
+            user = User(username=username, username_lower=username_lower)
             user.set_password(password)
             session.add(user)
             session.commit()
             
             user_dict = user.to_dict()
             session.close()
+            
+            if self.is_dev:
+                print(f"[DEV] DB CREATE USER SUCCESS: {username} (ID: {user_dict['id']})")
+            logger.info(f"User created successfully: {username} (ID: {user_dict['id']})")
+            
             return user_dict
         except Exception as e:
-            logger.error(f"Failed to create user: {e}")
+            logger.error(f"Failed to create user '{username}': {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             if session:
                 session.rollback()
                 session.close()
@@ -350,25 +407,35 @@ class Database:
         if not self.enabled:
             return None
         
-        if self.is_dev:
-            print(f"[DEV] DB AUTH: {username}")
-            return {'id': 1, 'username': username}  # Simulate success in dev
-        
         try:
             session = self.get_session()
-            user = session.query(User).filter_by(username=username, is_active=True).first()
+            
+            # Case-insensitive username lookup
+            username_lower = username.lower()
+            user = session.query(User).filter_by(username_lower=username_lower, is_active=True).first()
             
             if user and user.check_password(password):
                 user.last_login = datetime.utcnow()
                 session.commit()
                 user_dict = user.to_dict()
                 session.close()
+                
+                if self.is_dev:
+                    print(f"[DEV] DB AUTH SUCCESS: {username} (ID: {user_dict['id']})")
+                logger.info(f"User authenticated: {username}")
+                
                 return user_dict
             
             session.close()
+            
+            if self.is_dev:
+                print(f"[DEV] DB AUTH FAILED: {username} - invalid credentials")
+            logger.info(f"Authentication failed for username: {username}")
+            
             return None
         except Exception as e:
-            logger.error(f"Failed to authenticate user: {e}")
+            logger.error(f"Failed to authenticate user '{username}': {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             if session:
                 session.close()
             return None
