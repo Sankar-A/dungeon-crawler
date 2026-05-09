@@ -106,7 +106,6 @@
 
             <div id="game-area">
                 <canvas id="dungeon-canvas" width="800" height="600"></canvas>
-                <canvas id="minimap-canvas" width="150" height="150"></canvas>
                 <div id="controls">
                     <p>Use WASD or Arrow Keys to move</p>
                     <p>Press P to attack closest enemy</p>
@@ -118,9 +117,14 @@
                 </div>
             </div>
 
-            <div id="combat-log">
-                <h4>Combat Log</h4>
-                <div id="log-messages"></div>
+            <div id="right-column">
+                <div id="minimap-container">
+                    <canvas id="minimap-canvas" width="150" height="150"></canvas>
+                </div>
+                <div id="combat-log">
+                    <h4>Combat Log</h4>
+                    <div id="log-messages"></div>
+                </div>
             </div>
         </div>
 

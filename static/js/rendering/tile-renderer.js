@@ -1,8 +1,9 @@
 // Tile rendering functions
 
 function renderTiles(ctx, dungeon, viewport, sprites) {
-    for (let y = 0; y < VIEWPORT_HEIGHT; y++) {
-        for (let x = 0; x < VIEWPORT_WIDTH; x++) {
+    // Render one extra tile in each direction to cover the offset
+    for (let y = -1; y <= VIEWPORT_HEIGHT; y++) {
+        for (let x = -1; x <= VIEWPORT_WIDTH; x++) {
             const worldX = viewport.startX + x;
             const worldY = viewport.startY + y;
             

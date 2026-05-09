@@ -9,6 +9,10 @@ function setupSocketHandlers() {
         inventory = player.inventory || [];
         lootDrops = {};
         
+        // Initialize visual position to match actual position
+        playerVisualX = player.x;
+        playerVisualY = player.y;
+        
         document.getElementById('start-screen').classList.remove('active');
         document.getElementById('login-screen').classList.remove('active');
         document.getElementById('character-select-screen').classList.remove('active');
@@ -40,6 +44,7 @@ function setupSocketHandlers() {
         if (data.player_id === socket.id) {
             player.x = data.x;
             player.y = data.y;
+            // Visual position will interpolate to this in the render loop
             // Don't stop walking here - let keyup handler control it
             // This allows walk animation to continue while keys are held
         } else {
@@ -66,9 +71,21 @@ function setupSocketHandlers() {
             createAttackAnimation(player.x, player.y, enemy.x, enemy.y, isRanged);
         }
         
+        // Create special attack visual effect if boss used special attack
+        if (result.special_attack && enemyId && enemies[enemyId]) {
+            const enemy = enemies[enemyId];
+            const specialAttack = result.special_attack;
+            createSpecialAttackEffect(specialAttack.ability, enemy.x, enemy.y, player.x, player.y);
+        }
+        
         addLog(`You dealt ${result.player_damage} damage!`, 'combat');
         if (result.enemy_damage > 0) {
-            addLog(`Enemy dealt ${result.enemy_damage} damage!`, 'damage');
+            if (result.special_attack) {
+                addLog(`${result.special_attack.description}`, 'boss-attack');
+                addLog(`Took ${result.enemy_damage} damage!`, 'damage');
+            } else {
+                addLog(`Enemy dealt ${result.enemy_damage} damage!`, 'damage');
+            }
         }
         
         updateHUD();

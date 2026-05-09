@@ -2,6 +2,7 @@
 Game movement and floor progression event handlers
 """
 import random
+import time
 from flask import request
 from flask_socketio import emit, join_room, leave_room
 from game_state import players, game_rooms
@@ -11,6 +12,10 @@ from game.lore_data import RARE_BOSSES
 from cache_helpers import save_player_data, save_dungeon, load_dungeon, save_enemies, load_enemies
 from config import Config
 
+# Movement rate limiting
+player_last_move = {}  # Track last move time per player
+MOVE_COOLDOWN = 0.05  # 50ms between moves (20 moves per second) - matches client interval
+
 def register_game_handlers(socketio):
     """Register game-related socket handlers"""
     
@@ -19,6 +24,15 @@ def register_game_handlers(socketio):
         player_id = request.sid
         if player_id not in players:
             return
+        
+        # Rate limiting - allow moves every 50ms (20 moves per second)
+        current_time = time.time()
+        if player_id in player_last_move:
+            time_since_last_move = current_time - player_last_move[player_id]
+            if time_since_last_move < MOVE_COOLDOWN:
+                return  # Too soon, ignore this move
+        
+        player_last_move[player_id] = current_time
         
         player = players[player_id]
         direction = data.get('direction')
@@ -129,6 +143,18 @@ def register_game_handlers(socketio):
                             boss_data = random.choice(suitable_bosses)
                     
                     enemy = Enemy(player.floor, enemy_data['x'], enemy_data['y'], is_boss, boss_data)
+                    game_rooms[new_floor]['enemies'][enemy_id] = enemy
+                
+                # Spawn special bosses in marked rooms (1% chance bonus rooms)
+                for special_boss_data in entities.get('special_boss_rooms', []):
+                    enemy_id = f"special_boss_{random.randint(0, 999999)}"
+                    
+                    # Always spawn as boss with legendary loot
+                    suitable_bosses = [b for b in RARE_BOSSES if abs(b['level'] - player.floor) <= 3]
+                    boss_data = random.choice(suitable_bosses) if suitable_bosses else None
+                    
+                    enemy = Enemy(player.floor, special_boss_data['x'], special_boss_data['y'], True, boss_data)
+                    enemy.guaranteed_legendary = True  # Mark for guaranteed legendary drop
                     game_rooms[new_floor]['enemies'][enemy_id] = enemy
                 
                 # Cache the new floor

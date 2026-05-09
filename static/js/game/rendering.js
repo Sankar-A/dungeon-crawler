@@ -2,8 +2,11 @@
 let animationLoop = null;
 let isWalking = false;
 let walkFrameIndex = 0;
+let walkFrameCounter = 0;
+const WALK_ANIMATION_SPEED = 8; // Frames to wait before advancing walk animation
 let attackAnimations = [];
 let deathAnimations = [];
+let specialEffects = []; // Boss special attack effects
 
 function createAttackAnimation(fromX, fromY, toX, toY, isRanged) {
     const dx = toX - fromX;
@@ -28,7 +31,7 @@ function createAttackAnimation(fromX, fromY, toX, toY, isRanged) {
         flipX: dx < 0,
         progress: 0,
         frame: 0,
-        duration: 8,
+        duration: 30, // Increased from 8 to slow down attack animations (30 frames = 500ms at 60 FPS)
         maxFrames: 8,
         type: isRanged ? 'projectile' : 'pierce'
     };
@@ -47,6 +50,51 @@ function createDeathAnimation(x, y, isBoss) {
     deathAnimations.push(animation);
 }
 
+function createSpecialAttackEffect(ability, fromX, fromY, toX, toY) {
+    const effect = {
+        ability,
+        fromX,
+        fromY,
+        toX,
+        toY,
+        progress: 0,
+        duration: 60, // 1 second at 60 FPS
+        particles: []
+    };
+    
+    // Initialize particles based on ability type
+    if (ability.includes('lightning') || ability.includes('thunder')) {
+        effect.color = '#00ffff';
+        effect.type = 'lightning';
+    } else if (ability.includes('fire') || ability.includes('flame') || ability.includes('inferno') || ability.includes('dragon_breath')) {
+        effect.color = '#ff4500';
+        effect.type = 'fire';
+    } else if (ability.includes('frost') || ability.includes('ice')) {
+        effect.color = '#87ceeb';
+        effect.type = 'frost';
+    } else if (ability.includes('shadow') || ability.includes('darkness')) {
+        effect.color = '#4b0082';
+        effect.type = 'shadow';
+    } else if (ability.includes('void') || ability.includes('chaos')) {
+        effect.color = '#8b00ff';
+        effect.type = 'void';
+    } else if (ability.includes('poison') || ability.includes('venom')) {
+        effect.color = '#00ff00';
+        effect.type = 'poison';
+    } else if (ability.includes('blood')) {
+        effect.color = '#8b0000';
+        effect.type = 'blood';
+    } else if (ability.includes('death') || ability.includes('soul')) {
+        effect.color = '#000000';
+        effect.type = 'death';
+    } else {
+        effect.color = '#ffffff';
+        effect.type = 'generic';
+    }
+    
+    specialEffects.push(effect);
+}
+
 function startAnimationLoop() {
     if (animationLoop) return;
     animationLoop = setInterval(() => {
@@ -54,15 +102,54 @@ function startAnimationLoop() {
             spriteRenderer.update();
             updateAttackAnimations();
             updateDeathAnimations();
+            updateSpecialEffects();
             
-            // Update walk animation
+            // Interpolate player visual position towards actual position
+            updatePlayerVisualPosition();
+            
+            // Update walk animation (slower than 60 FPS)
             if (isWalking) {
-                walkFrameIndex = (walkFrameIndex + 1) % 4;
+                walkFrameCounter++;
+                if (walkFrameCounter >= WALK_ANIMATION_SPEED) {
+                    walkFrameIndex = (walkFrameIndex + 1) % 4;
+                    walkFrameCounter = 0;
+                }
+            } else {
+                walkFrameCounter = 0;
+                walkFrameIndex = 0;
             }
             
             renderDungeon();
         }
-    }, 100);
+    }, 1000 / 60); // 60 FPS
+}
+
+function updatePlayerVisualPosition() {
+    // Always interpolate towards the actual server position
+    // This ensures visual and server positions stay synchronized
+    const dx = player.x - playerVisualX;
+    const dy = player.y - playerVisualY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // If very close, snap to target
+    if (distance < 0.01) {
+        playerVisualX = player.x;
+        playerVisualY = player.y;
+    } else {
+        // Move at constant speed towards server position (tiles per frame at 60 FPS)
+        const moveAmount = MOVE_SPEED / 60;
+        
+        if (distance <= moveAmount) {
+            // Close enough, snap to target
+            playerVisualX = player.x;
+            playerVisualY = player.y;
+        } else {
+            // Move towards server position at constant speed
+            const ratio = moveAmount / distance;
+            playerVisualX += dx * ratio;
+            playerVisualY += dy * ratio;
+        }
+    }
 }
 
 function renderDungeon() {
@@ -70,6 +157,10 @@ function renderDungeon() {
     
     setupCanvas(ctx, canvas);
     const viewport = calculateViewport(player);
+    
+    // Apply viewport offset for smooth scrolling to all rendering
+    ctx.save();
+    ctx.translate(-viewport.offsetX, -viewport.offsetY);
     
     renderTiles(ctx, dungeon, viewport, sprites);
     renderStairs(ctx, entities, viewport, sprites, spriteRenderer);
@@ -83,6 +174,11 @@ function renderDungeon() {
     renderOtherPlayers(ctx, otherPlayers, viewport, sprites, spriteRenderer);
     renderPlayer(ctx, player, viewport, sprites, spriteRenderer, attackAnimations, isWalking, walkFrameIndex);
     renderAttackAnimations();
+    renderSpecialEffects(); // Render boss special attack effects
+    
+    ctx.restore();
+    
+    // Render UI elements without offset
     renderDebugInfo(ctx, player, debugMode);
     renderMinimap();
 }
@@ -172,7 +268,8 @@ function updateAttackAnimations() {
     attackAnimations = attackAnimations.filter(anim => {
         anim.progress++;
         if (anim.type === 'pierce') {
-            anim.frame = Math.min(Math.floor(anim.progress), 7);
+            // Calculate frame based on progress (8 frames over 30 progress steps)
+            anim.frame = Math.min(Math.floor((anim.progress / anim.duration) * anim.maxFrames), anim.maxFrames - 1);
         }
         return anim.progress < anim.duration;
     });
@@ -298,5 +395,208 @@ function renderAttackAnimations() {
                 ctx.restore();
             }
         }
+    }
+}
+
+
+function updateSpecialEffects() {
+    specialEffects = specialEffects.filter(effect => {
+        effect.progress++;
+        return effect.progress < effect.duration;
+    });
+}
+
+function renderSpecialEffects() {
+    if (!ctx) return;
+    
+    for (const effect of specialEffects) {
+        const viewport = calculateViewport(player);
+        const progress = effect.progress / effect.duration;
+        
+        const fromScreenX = (effect.fromX - viewport.startX) * TILE_SIZE + TILE_SIZE / 2;
+        const fromScreenY = (effect.fromY - viewport.startY) * TILE_SIZE + TILE_SIZE / 2;
+        const toScreenX = (effect.toX - viewport.startX) * TILE_SIZE + TILE_SIZE / 2;
+        const toScreenY = (effect.toY - viewport.startY) * TILE_SIZE + TILE_SIZE / 2;
+        
+        ctx.save();
+        
+        if (effect.type === 'lightning') {
+            // Lightning bolt effect
+            ctx.strokeStyle = effect.color;
+            ctx.lineWidth = 3;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = effect.color;
+            ctx.globalAlpha = 1 - progress;
+            
+            ctx.beginPath();
+            ctx.moveTo(fromScreenX, fromScreenY);
+            
+            // Jagged lightning path
+            const steps = 5;
+            for (let i = 1; i <= steps; i++) {
+                const t = i / steps;
+                const x = fromScreenX + (toScreenX - fromScreenX) * t + (Math.random() - 0.5) * 30;
+                const y = fromScreenY + (toScreenY - fromScreenY) * t + (Math.random() - 0.5) * 30;
+                ctx.lineTo(x, y);
+            }
+            ctx.lineTo(toScreenX, toScreenY);
+            ctx.stroke();
+            
+        } else if (effect.type === 'fire') {
+            // Fire particles
+            const numParticles = 20;
+            ctx.globalAlpha = 1 - progress;
+            
+            for (let i = 0; i < numParticles; i++) {
+                const angle = (i / numParticles) * Math.PI * 2;
+                const distance = progress * TILE_SIZE * 2;
+                const x = toScreenX + Math.cos(angle) * distance;
+                const y = toScreenY + Math.sin(angle) * distance;
+                
+                const gradient = ctx.createRadialGradient(x, y, 0, x, y, 10);
+                gradient.addColorStop(0, '#ff4500');
+                gradient.addColorStop(0.5, '#ff8c00');
+                gradient.addColorStop(1, 'rgba(255, 69, 0, 0)');
+                
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(x, y, 10, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+        } else if (effect.type === 'frost') {
+            // Frost wave
+            ctx.strokeStyle = effect.color;
+            ctx.lineWidth = 4;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = effect.color;
+            ctx.globalAlpha = 1 - progress;
+            
+            const radius = progress * TILE_SIZE * 3;
+            ctx.beginPath();
+            ctx.arc(toScreenX, toScreenY, radius, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Ice crystals
+            for (let i = 0; i < 8; i++) {
+                const angle = (i / 8) * Math.PI * 2;
+                const x = toScreenX + Math.cos(angle) * radius;
+                const y = toScreenY + Math.sin(angle) * radius;
+                
+                ctx.fillStyle = effect.color;
+                ctx.fillRect(x - 3, y - 3, 6, 6);
+            }
+            
+        } else if (effect.type === 'shadow') {
+            // Darkness spreading
+            ctx.fillStyle = effect.color;
+            ctx.globalAlpha = (1 - progress) * 0.7;
+            
+            const radius = progress * TILE_SIZE * 4;
+            const gradient = ctx.createRadialGradient(toScreenX, toScreenY, 0, toScreenX, toScreenY, radius);
+            gradient.addColorStop(0, 'rgba(75, 0, 130, 0.8)');
+            gradient.addColorStop(1, 'rgba(75, 0, 130, 0)');
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(toScreenX - radius, toScreenY - radius, radius * 2, radius * 2);
+            
+        } else if (effect.type === 'void') {
+            // Void tentacles
+            ctx.strokeStyle = effect.color;
+            ctx.lineWidth = 5;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = effect.color;
+            ctx.globalAlpha = 1 - progress;
+            
+            for (let i = 0; i < 3; i++) {
+                const angle = (i / 3) * Math.PI * 2 + progress * Math.PI;
+                const length = TILE_SIZE * 2;
+                
+                ctx.beginPath();
+                ctx.moveTo(fromScreenX, fromScreenY);
+                
+                for (let j = 0; j <= 10; j++) {
+                    const t = j / 10;
+                    const x = fromScreenX + Math.cos(angle) * length * t + Math.sin(t * Math.PI * 4) * 20;
+                    const y = fromScreenY + Math.sin(angle) * length * t + Math.cos(t * Math.PI * 4) * 20;
+                    ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
+            
+        } else if (effect.type === 'poison') {
+            // Poison cloud
+            ctx.fillStyle = effect.color;
+            ctx.globalAlpha = (1 - progress) * 0.5;
+            
+            const radius = progress * TILE_SIZE * 2;
+            for (let i = 0; i < 10; i++) {
+                const angle = (i / 10) * Math.PI * 2;
+                const distance = radius + Math.sin(effect.progress * 0.1 + i) * 10;
+                const x = toScreenX + Math.cos(angle) * distance;
+                const y = toScreenY + Math.sin(angle) * distance;
+                
+                ctx.beginPath();
+                ctx.arc(x, y, 15, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+        } else if (effect.type === 'blood') {
+            // Blood splatter
+            ctx.fillStyle = effect.color;
+            ctx.globalAlpha = 1 - progress;
+            
+            for (let i = 0; i < 15; i++) {
+                const angle = (i / 15) * Math.PI * 2;
+                const distance = progress * TILE_SIZE * 1.5;
+                const x = toScreenX + Math.cos(angle) * distance;
+                const y = toScreenY + Math.sin(angle) * distance;
+                
+                ctx.beginPath();
+                ctx.arc(x, y, 5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+        } else if (effect.type === 'death') {
+            // Death aura
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 25;
+            ctx.shadowColor = '#000000';
+            ctx.globalAlpha = 1 - progress;
+            
+            const radius = progress * TILE_SIZE * 3;
+            ctx.beginPath();
+            ctx.arc(toScreenX, toScreenY, radius, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Skull symbol (simplified)
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 30px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('💀', toScreenX, toScreenY);
+            
+        } else {
+            // Generic energy blast
+            ctx.strokeStyle = effect.color;
+            ctx.lineWidth = 4;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = effect.color;
+            ctx.globalAlpha = 1 - progress;
+            
+            ctx.beginPath();
+            ctx.moveTo(fromScreenX, fromScreenY);
+            ctx.lineTo(toScreenX, toScreenY);
+            ctx.stroke();
+            
+            // Impact circle
+            const impactRadius = progress * TILE_SIZE;
+            ctx.beginPath();
+            ctx.arc(toScreenX, toScreenY, impactRadius, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        
+        ctx.restore();
     }
 }

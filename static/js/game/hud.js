@@ -39,7 +39,8 @@ function addLog(message, type = 'info') {
     logMessages.appendChild(logEntry);
     logMessages.scrollTop = logMessages.scrollHeight;
     
-    if (logMessages.children.length > 50) {
+    // Keep only the last 10 messages
+    if (logMessages.children.length > 10) {
         logMessages.removeChild(logMessages.firstChild);
     }
 }

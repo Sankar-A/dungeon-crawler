@@ -3,7 +3,7 @@
 class SpriteRenderer {
     constructor() {
         this.animationFrame = 0;
-        this.animationSpeed = 10;
+        this.animationSpeed = 20; // Increased from 10 to slow down animations (higher = slower)
         this.frameCounter = 0;
     }
     

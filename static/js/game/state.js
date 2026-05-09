@@ -8,6 +8,11 @@ const VIEWPORT_WIDTH = 25;
 const VIEWPORT_HEIGHT = 18;
 const LOOT_RANGE = 5;
 
+// Movement interpolation - linear speed in tiles per second
+// Server updates every 50ms (20 times per second)
+// Visual speed set to 20 tiles/sec to match server update rate
+const MOVE_SPEED = 20.0; // Tiles per second - matches server rate
+
 // Game state management
 let player = null;
 let dungeon = null;
@@ -18,6 +23,10 @@ let inventory = [];
 let lootDrops = {};
 let animations = [];
 let debugMode = false;
+
+// Player visual position (for smooth movement)
+let playerVisualX = 0;
+let playerVisualY = 0;
 
 // Modal state
 let activeModal = null;

@@ -46,12 +46,17 @@ function renderOtherPlayer(ctx, screenX, screenY, otherPlayer, sprites, spriteRe
 }
 
 function renderPlayer(ctx, player, viewport, sprites, spriteRenderer, attackAnimations, isWalking, walkFrameIndex) {
-    const playerX = viewport.centerX;
-    const playerY = viewport.centerY;
+    // Calculate player position with sub-tile precision
+    const visualX = viewport.visualX || player.x;
+    const visualY = viewport.visualY || player.y;
+    
+    // Calculate screen position with fractional offset
+    const screenX = (visualX - viewport.startX) * TILE_SIZE;
+    const screenY = (visualY - viewport.startY) * TILE_SIZE;
     
     // Draw attack range indicator if ranged weapon
     if (player.weapon && player.weapon.ranged) {
-        renderWeaponRange(ctx, playerX, playerY, player.weapon.range);
+        renderWeaponRange(ctx, screenX, screenY, player.weapon.range);
     }
     
     // Check if attacking with pierce (melee)
@@ -65,20 +70,20 @@ function renderPlayer(ctx, player, viewport, sprites, spriteRenderer, attackAnim
     
     // Always render player sprite unless doing pierce attack (pierce sprite replaces player)
     if (!isAttacking) {
-        renderPlayerSprite(ctx, playerX, playerY, player, sprites, spriteRenderer, isWalking, walkFrameIndex);
+        renderPlayerSprite(ctx, screenX, screenY, player, sprites, spriteRenderer, isWalking, walkFrameIndex);
     }
     
     // Always render player info
-    renderPlayerInfo(ctx, playerX, playerY, player);
+    renderPlayerInfo(ctx, screenX, screenY, player);
 }
 
-function renderWeaponRange(ctx, playerX, playerY, range) {
+function renderWeaponRange(ctx, screenX, screenY, range) {
     ctx.strokeStyle = 'rgba(52, 152, 219, 0.3)';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(
-        playerX * TILE_SIZE + TILE_SIZE / 2,
-        playerY * TILE_SIZE + TILE_SIZE / 2,
+        screenX + TILE_SIZE / 2,
+        screenY + TILE_SIZE / 2,
         range * TILE_SIZE,
         0,
         Math.PI * 2
@@ -86,7 +91,7 @@ function renderWeaponRange(ctx, playerX, playerY, range) {
     ctx.stroke();
 }
 
-function renderPlayerSprite(ctx, playerX, playerY, player, sprites, spriteRenderer, isWalking, walkFrameIndex) {
+function renderPlayerSprite(ctx, screenX, screenY, player, sprites, spriteRenderer, isWalking, walkFrameIndex) {
     if (sprites.loaded) {
         const useWalkSprite = isWalking && sprites.playerWalk && sprites.playerWalk.complete;
         const playerSprite = useWalkSprite ? sprites.playerWalk : sprites.playerIdle;
@@ -100,42 +105,42 @@ function renderPlayerSprite(ctx, playerX, playerY, player, sprites, spriteRender
             ctx.drawImage(
                 playerSprite,
                 frame * 64, 0, 64, 64,
-                playerX * TILE_SIZE - 16, playerY * TILE_SIZE - 16, 64, 64
+                screenX - 16, screenY - 16, 64, 64
             );
             
             ctx.restore();
         } else {
-            renderPlayerFallback(ctx, playerX, playerY);
+            renderPlayerFallback(ctx, screenX, screenY);
         }
     } else {
-        renderPlayerFallback(ctx, playerX, playerY);
+        renderPlayerFallback(ctx, screenX, screenY);
     }
 }
 
-function renderPlayerFallback(ctx, playerX, playerY) {
+function renderPlayerFallback(ctx, screenX, screenY) {
     ctx.fillStyle = '#3498db';
-    ctx.fillRect(playerX * TILE_SIZE + 2, playerY * TILE_SIZE + 2, 
+    ctx.fillRect(screenX + 2, screenY + 2, 
                 TILE_SIZE - 4, TILE_SIZE - 4);
     ctx.fillStyle = '#fff';
-    ctx.fillRect(playerX * TILE_SIZE + 6, playerY * TILE_SIZE + 6, 4, 4);
+    ctx.fillRect(screenX + 6, screenY + 6, 4, 4);
 }
 
-function renderPlayerInfo(ctx, playerX, playerY, player) {
+function renderPlayerInfo(ctx, screenX, screenY, player) {
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 10px Arial';
     ctx.textAlign = 'center';
     ctx.shadowBlur = 3;
     ctx.shadowColor = '#000';
     ctx.fillText(player.name, 
-                 playerX * TILE_SIZE + TILE_SIZE/2, 
-                 playerY * TILE_SIZE - 4);
+                 screenX + TILE_SIZE/2, 
+                 screenY - 4);
     
     if (player.weapon && player.weapon.ranged) {
         ctx.fillStyle = '#3498db';
         ctx.font = '8px Arial';
         ctx.fillText(`Range: ${player.weapon.range}`, 
-                     playerX * TILE_SIZE + TILE_SIZE/2, 
-                     playerY * TILE_SIZE + TILE_SIZE + 10);
+                     screenX + TILE_SIZE/2, 
+                     screenY + TILE_SIZE + 10);
     }
     ctx.shadowBlur = 0;
 }

@@ -386,6 +386,7 @@ body {
     border-radius: 8px;
     padding: 1rem;
     overflow-y: auto;
+    flex: 1;
 }
 
 #combat-log h4 {
@@ -396,7 +397,7 @@ body {
 #log-messages {
     font-size: 0.9rem;
     line-height: 1.4;
-    max-height: 400px;
+    max-height: 600px;
     overflow-y: auto;
     display: flex;
     flex-direction: column-reverse;
@@ -419,6 +420,34 @@ body {
 
 .log-entry.loot {
     border-left: 3px solid #f39c12;
+}
+
+.log-entry.boss-attack {
+    border-left: 4px solid #9b59b6;
+    background: rgba(155, 89, 182, 0.15);
+    font-weight: bold;
+    color: #e8daef;
+    box-shadow: 0 0 10px rgba(155, 89, 182, 0.3);
+}
+
+.log-entry.combat {
+    border-left: 3px solid #3498db;
+}
+
+.log-entry.xp {
+    border-left: 3px solid #9b59b6;
+    color: #d7bde2;
+}
+
+.log-entry.floor {
+    border-left: 3px solid #f39c12;
+    background: rgba(243, 156, 18, 0.1);
+    font-weight: bold;
+}
+
+.log-entry.info {
+    border-left: 3px solid #95a5a6;
+    color: #bdc3c7;
 }
 
 /* Modals */
@@ -629,10 +658,19 @@ body {
 
 
 /* Minimap */
+#right-column {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+#minimap-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
 #minimap-canvas {
-    position: absolute;
-    top: 10px;
-    right: 10px;
     border: 3px solid #f39c12;
     border-radius: 8px;
     background: rgba(0, 0, 0, 0.7);

@@ -39,6 +39,9 @@ class Config:
     CACHE_ENEMIES_TTL = int(os.getenv('CACHE_ENEMIES_TTL', 1800))  # 30 minutes
     CACHE_LEADERBOARD_TTL = int(os.getenv('CACHE_LEADERBOARD_TTL', 300))  # 5 minutes
     
+    # Testing/Debug Configuration
+    FLOOR_1_BOSS = os.getenv('FLOOR_1_BOSS', None)  # Boss ID to spawn on floor 1 for testing
+    
     @staticmethod
     def validate():
         """Validate critical configuration"""

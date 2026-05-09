@@ -1,12 +1,13 @@
 // Input handling
 let lastMoveTime = 0;
 let lastAttackTime = 0;
-const MOVE_COOLDOWN = 250; // ms between moves
-const ATTACK_COOLDOWN = 800; // ms between attacks (matches 8-frame animation at 100ms/frame)
+const MOVE_INTERVAL = 50; // Send move commands every 50ms for smooth movement
+const ATTACK_COOLDOWN = 800; // ms between attacks
 
 let keysPressed = {}; // Track which keys are currently held down
 let moveInterval = null;
 let attackInterval = null;
+let currentDirection = null; // Track current movement direction
 
 function setupInputHandlers() {
     document.addEventListener('keydown', (e) => {
@@ -56,67 +57,35 @@ function setupInputHandlers() {
         // Movement - start continuous movement
         if (key === 'w' || key === 'arrowup') {
             e.preventDefault();
-            const currentTime = Date.now();
-            if (currentTime - lastMoveTime >= MOVE_COOLDOWN) {
-                handleMove('up');
-                lastMoveTime = currentTime;
-            }
+            handleMove('up');
             if (!moveInterval) {
                 moveInterval = setInterval(() => {
-                    const now = Date.now();
-                    if (now - lastMoveTime >= MOVE_COOLDOWN) {
-                        handleMove('up');
-                        lastMoveTime = now;
-                    }
-                }, MOVE_COOLDOWN);
+                    handleMove('up');
+                }, MOVE_INTERVAL);
             }
         } else if (key === 's' || key === 'arrowdown') {
             e.preventDefault();
-            const currentTime = Date.now();
-            if (currentTime - lastMoveTime >= MOVE_COOLDOWN) {
-                handleMove('down');
-                lastMoveTime = currentTime;
-            }
+            handleMove('down');
             if (!moveInterval) {
                 moveInterval = setInterval(() => {
-                    const now = Date.now();
-                    if (now - lastMoveTime >= MOVE_COOLDOWN) {
-                        handleMove('down');
-                        lastMoveTime = now;
-                    }
-                }, MOVE_COOLDOWN);
+                    handleMove('down');
+                }, MOVE_INTERVAL);
             }
         } else if (key === 'a' || key === 'arrowleft') {
             e.preventDefault();
-            const currentTime = Date.now();
-            if (currentTime - lastMoveTime >= MOVE_COOLDOWN) {
-                handleMove('left');
-                lastMoveTime = currentTime;
-            }
+            handleMove('left');
             if (!moveInterval) {
                 moveInterval = setInterval(() => {
-                    const now = Date.now();
-                    if (now - lastMoveTime >= MOVE_COOLDOWN) {
-                        handleMove('left');
-                        lastMoveTime = now;
-                    }
-                }, MOVE_COOLDOWN);
+                    handleMove('left');
+                }, MOVE_INTERVAL);
             }
         } else if (key === 'd' || key === 'arrowright') {
             e.preventDefault();
-            const currentTime = Date.now();
-            if (currentTime - lastMoveTime >= MOVE_COOLDOWN) {
-                handleMove('right');
-                lastMoveTime = currentTime;
-            }
+            handleMove('right');
             if (!moveInterval) {
                 moveInterval = setInterval(() => {
-                    const now = Date.now();
-                    if (now - lastMoveTime >= MOVE_COOLDOWN) {
-                        handleMove('right');
-                        lastMoveTime = now;
-                    }
-                }, MOVE_COOLDOWN);
+                    handleMove('right');
+                }, MOVE_INTERVAL);
             }
         }
         
@@ -215,6 +184,12 @@ function startWalking() {
 function stopWalking() {
     isWalking = false;
     walkFrameIndex = 0;
+    
+    // Snap visual position to actual position when stopping
+    if (player) {
+        playerVisualX = player.x;
+        playerVisualY = player.y;
+    }
 }
 
 function attackClosestEnemy() {

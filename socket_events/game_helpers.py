@@ -65,6 +65,17 @@ def start_game(player_id, player):
             for enemy_data in entities['enemies']:
                 enemy_id = f"enemy_{random.randint(0, 999999)}"
                 
+                # Check for floor 1 boss override (testing/debug)
+                if player.floor == 1 and Config.FLOOR_1_BOSS and len(game_rooms[floor_key]['enemies']) == 0:
+                    # Spawn specific boss on floor 1 for testing
+                    boss_data = next((b for b in RARE_BOSSES if b['id'] == Config.FLOOR_1_BOSS), None)
+                    if boss_data:
+                        enemy = Enemy(player.floor, enemy_data['x'], enemy_data['y'], True, boss_data)
+                        game_rooms[floor_key]['enemies'][enemy_id] = enemy
+                        if Config.FLASK_ENV == 'development':
+                            print(f"[DEV] Spawned test boss '{boss_data['name']}' on floor 1")
+                        continue  # Skip normal enemy spawn for this slot
+                
                 # Check for boss spawn (every 5 floors)
                 is_boss = player.floor % 5 == 0 and len(game_rooms[floor_key]['enemies']) == 0
                 boss_data = None
