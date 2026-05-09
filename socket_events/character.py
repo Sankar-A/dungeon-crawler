@@ -7,6 +7,9 @@ from game_state import authenticated_users, players
 from database import db
 from game.player import Player
 from .game_helpers import start_game
+import logging
+
+logger = logging.getLogger(__name__)
 
 def register_character_handlers(socketio):
     """Register character-related socket handlers"""
@@ -105,6 +108,27 @@ def _load_existing_character(player_id, user, char_data):
     player.armor = char_data['armor']
     player.skills = char_data['skills']
     player.skill_points = char_data['skill_points']
+    player.inventory = char_data.get('inventory', [])
+    
+    # Update the old database entry with new session ID
+    if db.enabled:
+        # Delete the old player_id entry if it's different
+        old_player_id = char_data['id']
+        if old_player_id != player_id:
+            session = db.get_session()
+            try:
+                from database import PlayerData
+                # Delete old entry
+                old_entry = session.query(PlayerData).filter_by(id=old_player_id).first()
+                if old_entry:
+                    session.delete(old_entry)
+                    session.commit()
+                    logger.info(f"Cleaned up old player entry: {old_player_id}")
+            except Exception as e:
+                session.rollback()
+                logger.error(f"Error cleaning up old player entry: {e}")
+            finally:
+                session.close()
     
     players[player_id] = player
     
