@@ -752,3 +752,182 @@ body {
     margin-top: 0.5rem;
     width: 100%;
 }
+
+/* Telegraph UI Component */
+.telegraph-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.9);
+    border: 3px solid #ff0000;
+    border-radius: 12px;
+    padding: 1.5rem;
+    min-width: 300px;
+    box-shadow: 0 8px 24px rgba(255, 0, 0, 0.5);
+    z-index: 900;
+    animation: pulse-border 1s infinite;
+}
+
+.telegraph-container.hidden {
+    display: none;
+}
+
+@keyframes pulse-border {
+    0%, 100% {
+        border-color: #ff0000;
+        box-shadow: 0 8px 24px rgba(255, 0, 0, 0.5);
+    }
+    50% {
+        border-color: #ff4444;
+        box-shadow: 0 8px 32px rgba(255, 0, 0, 0.8);
+    }
+}
+
+.telegraph-warning-icon {
+    font-size: 3rem;
+    text-align: center;
+    margin-bottom: 0.5rem;
+    animation: shake 0.5s infinite;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
+.telegraph-boss-name {
+    font-size: 1.3rem;
+    font-weight: bold;
+    color: #ff4444;
+    text-align: center;
+    margin-bottom: 0.5rem;
+}
+
+.telegraph-ability-name {
+    font-size: 1.1rem;
+    color: #ffaa00;
+    text-align: center;
+    margin-bottom: 0.75rem;
+}
+
+.telegraph-countdown {
+    font-size: 1.5rem;
+    font-weight: bold;
+    text-align: center;
+    padding: 0.5rem;
+    background: rgba(255, 0, 0, 0.2);
+    border-radius: 8px;
+}
+
+/* Resistance UI Component */
+.resistance-container {
+    position: fixed;
+    top: 100px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.85);
+    border: 2px solid #00ff00;
+    border-radius: 10px;
+    padding: 1rem;
+    min-width: 200px;
+    box-shadow: 0 4px 16px rgba(0, 255, 0, 0.3);
+    z-index: 900;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    animation: fade-in 0.3s;
+}
+
+.resistance-container.hidden {
+    display: none;
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.resistance-icon {
+    font-size: 2.5rem;
+}
+
+.resistance-content {
+    flex: 1;
+}
+
+.resistance-element {
+    font-size: 1.1rem;
+    font-weight: bold;
+    margin-bottom: 0.25rem;
+}
+
+.resistance-turns {
+    font-size: 0.9rem;
+    color: #bbb;
+}
+
+/* Blink Cooldown UI Component */
+.blink-cooldown {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.85);
+    border: 2px solid #8800ff;
+    border-radius: 12px;
+    padding: 1rem;
+    box-shadow: 0 4px 16px rgba(136, 0, 255, 0.4);
+    z-index: 900;
+    text-align: center;
+}
+
+.blink-cooldown.hidden {
+    display: none;
+}
+
+.cooldown-svg {
+    display: block;
+    margin: 0 auto;
+}
+
+.cooldown-label {
+    font-size: 0.9rem;
+    font-weight: bold;
+    color: #8800ff;
+    margin-top: 0.5rem;
+}
+
+.cooldown-text {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #fff;
+    margin-top: 0.25rem;
+}
+
+/* Combat Log Enhancements for Avoidance System */
+.log-entry.success {
+    border-left: 3px solid #00ff00;
+    background: rgba(0, 255, 0, 0.1);
+    color: #7dff7d;
+}
+
+.log-entry.error {
+    border-left: 3px solid #ff0000;
+    background: rgba(255, 0, 0, 0.1);
+    color: #ff7d7d;
+}
+
+/* Additional styling for resistance potions in inventory */
+.inventory-modal-item h4 {
+    margin-bottom: 0.5rem;
+}
+
+.inventory-modal-item h4 {
+    color: #f39c12;
+}
+

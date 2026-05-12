@@ -1,5 +1,8 @@
 import random
-from .lore_data import RARE_BOSSES
+from .lore_data import RARE_BOSSES, get_ability_element
+from .attack_zones import is_player_in_zone
+from .telegraph import telegraph_manager
+from .attack_patterns import pattern_manager
 
 class Enemy:
     def __init__(self, level, x, y, is_boss=False, boss_data=None):
@@ -18,6 +21,20 @@ class Enemy:
             self.drops = boss_data.get('drops', [])
             self.abilities = boss_data.get('abilities', [])
             self.boss_id = boss_data.get('id', '')
+            
+            # Telegraph state
+            self.telegraph_active = False
+            self.telegraph_ability = None
+            self.telegraph_turns_remaining = 0
+            
+            # Attack pattern state
+            self.attack_pattern_index = 0
+            attack_pattern = boss_data.get('attack_pattern', {})
+            self.attack_pattern_type = attack_pattern.get('type', 'predictable')
+            self.attack_pattern_sequence = attack_pattern.get('sequence', [])
+            
+            # Facing direction for directional attacks
+            self.facing_direction = 'down'
         else:
             # Exponential scaling for regular enemies
             # Base stats with exponential growth
@@ -55,8 +72,8 @@ class Enemy:
             'abilities': self.abilities if hasattr(self, 'abilities') else []
         }
 
-def calculate_combat(player, enemy):
-    """Simulate one round of combat"""
+def calculate_combat(player, enemy, telegraph_manager_instance=None, dungeon_grid=None):
+    """Simulate one round of combat with telegraph support"""
     result = {
         'player_damage': 0,
         'enemy_damage': 0,
@@ -67,7 +84,10 @@ def calculate_combat(player, enemy):
         'critical': False,
         'dodged': False,
         'special_attack': None,  # Track if boss used special attack
-        'status_effects': []  # Track status effects applied
+        'status_effects': [],  # Track status effects applied
+        'telegraph_started': None,
+        'telegraph_executed': None,
+        'telegraph_continuing': None
     }
     
     # Player attacks
@@ -85,17 +105,87 @@ def calculate_combat(player, enemy):
     
     # Enemy attacks back if alive
     if not enemy_defeated:
-        # Boss special attacks (30% chance if cooldown is ready)
-        if enemy.is_boss and hasattr(enemy, 'abilities') and enemy.abilities:
+        # Check if telegraph is active for boss
+        if enemy.is_boss and hasattr(enemy, 'telegraph_active') and enemy.telegraph_active:
+            # Update telegraph countdown
+            if telegraph_manager_instance:
+                should_execute = telegraph_manager_instance.update_telegraph(id(enemy))
+                
+                if should_execute:
+                    # Execute telegraphed attack
+                    ability = telegraph_manager_instance.execute_telegraph(id(enemy))
+                    enemy.telegraph_active = False
+                    enemy.telegraph_ability = None
+                    enemy.telegraph_turns_remaining = 0
+                    
+                    if ability:
+                        special_result = execute_special_attack_with_zones(
+                            enemy, player, ability, dungeon_grid
+                        )
+                        result['special_attack'] = special_result
+                        result['telegraph_executed'] = ability['name']
+                        result['enemy_damage'] = special_result.get('damage', 0)
+                        result['status_effects'] = special_result.get('status_effects', [])
+                        result['player_hp'] = player.hp
+                        result['player_defeated'] = player.hp <= 0
+                    
+                    # Set cooldown after execution
+                    enemy.special_attack_cooldown = 3
+                else:
+                    # Still telegraphing - no attack this turn
+                    enemy.telegraph_turns_remaining -= 1
+                    result['telegraph_continuing'] = {
+                        'ability': enemy.telegraph_ability['name'] if enemy.telegraph_ability else 'unknown',
+                        'turns_remaining': enemy.telegraph_turns_remaining
+                    }
+        
+        # Boss special attacks (if not telegraphing)
+        elif enemy.is_boss and hasattr(enemy, 'abilities') and enemy.abilities:
             if enemy.special_attack_cooldown <= 0 and random.random() < 0.3:
-                special_result = execute_special_attack(enemy, player)
-                result['special_attack'] = special_result
-                result['enemy_damage'] = special_result.get('damage', 0)
-                result['status_effects'] = special_result.get('status_effects', [])
-                enemy.special_attack_cooldown = 3  # 3 turn cooldown
+                # Get next ability from pattern manager
+                boss_data = next((b for b in RARE_BOSSES if b.get('id') == enemy.boss_id), None)
+                
+                if boss_data:
+                    ability = pattern_manager.get_next_ability(id(enemy), boss_data)
+                else:
+                    # Fallback to random selection
+                    ability = random.choice(enemy.abilities)
+                
+                # Check if ability has telegraph
+                if ability and ability.get('telegraph_turns', 0) > 0:
+                    # Start telegraph phase
+                    if telegraph_manager_instance:
+                        telegraph_state = telegraph_manager_instance.start_telegraph(
+                            id(enemy), ability, enemy
+                        )
+                        result['telegraph_started'] = telegraph_state
+                    else:
+                        # No telegraph manager, execute immediately
+                        special_result = execute_special_attack_with_zones(
+                            enemy, player, ability, dungeon_grid
+                        )
+                        result['special_attack'] = special_result
+                        result['enemy_damage'] = special_result.get('damage', 0)
+                        result['status_effects'] = special_result.get('status_effects', [])
+                        result['player_hp'] = player.hp
+                        result['player_defeated'] = player.hp <= 0
+                        enemy.special_attack_cooldown = 3
+                else:
+                    # Execute immediately (no telegraph)
+                    if ability:
+                        special_result = execute_special_attack_with_zones(
+                            enemy, player, ability, dungeon_grid
+                        )
+                        result['special_attack'] = special_result
+                        result['enemy_damage'] = special_result.get('damage', 0)
+                        result['status_effects'] = special_result.get('status_effects', [])
+                        result['player_hp'] = player.hp
+                        result['player_defeated'] = player.hp <= 0
+                    enemy.special_attack_cooldown = 3
             else:
-                # Normal attack
-                enemy.special_attack_cooldown = max(0, enemy.special_attack_cooldown - 1)
+                # Normal attack or cooldown
+                if not (hasattr(enemy, 'telegraph_active') and enemy.telegraph_active):
+                    enemy.special_attack_cooldown = max(0, enemy.special_attack_cooldown - 1)
                 result.update(_normal_enemy_attack(player, enemy))
         else:
             # Regular enemy normal attack
@@ -272,6 +362,132 @@ def execute_special_attack(enemy, player):
     result['player_defeated'] = player.hp <= 0
     return result
 
+
+def execute_special_attack_with_zones(enemy, player, ability, dungeon_grid=None):
+    """
+    Execute a boss special attack with zone checking and resistance application
+    
+    Args:
+        enemy: Enemy object with position and facing
+        player: Player object with position and resistance
+        ability: Ability dict with attack_zone, element, damage_multiplier, special_effects
+        dungeon_grid: 2D array of dungeon tiles (optional)
+    
+    Returns:
+        dict: Result with damage, status_effects, avoided, resisted, resistance_reduction, description
+    """
+    result = {
+        'ability': ability.get('name', 'unknown'),
+        'damage': 0,
+        'status_effects': [],
+        'avoided': False,
+        'resisted': False,
+        'resistance_reduction': 0.0,
+        'description': ''
+    }
+    
+    # Check if player is in attack zone
+    attack_zone = ability.get('attack_zone', {'type': 'none'})
+    if attack_zone.get('type') != 'none':
+        in_zone = is_player_in_zone(attack_zone, enemy, player, dungeon_grid)
+        if not in_zone:
+            result['avoided'] = True
+            result['description'] = f"{enemy.name} uses {ability.get('name')} but you avoided it!"
+            return result
+    
+    # Calculate base damage
+    damage_multiplier = ability.get('damage_multiplier', 1.0)
+    base_damage = int(enemy.damage * damage_multiplier)
+    
+    # Apply armor penetration if present
+    special_effects = ability.get('special_effects', {})
+    armor_penetration = special_effects.get('armor_penetration', 0.0)
+    
+    if armor_penetration > 0:
+        defense = player.calculate_defense()
+        reduced_defense = int(defense * (1.0 - armor_penetration))
+        actual_damage = max(1, base_damage - reduced_defense)
+    else:
+        actual_damage = max(1, base_damage - player.calculate_defense())
+    
+    # Apply resistance reduction
+    element = get_ability_element(ability.get('name', ''))
+    resistance_reduction = player.calculate_resistance_reduction(element)
+    
+    if resistance_reduction > 0:
+        result['resisted'] = True
+        result['resistance_reduction'] = resistance_reduction
+        actual_damage = int(actual_damage * (1.0 - resistance_reduction))
+    
+    # Apply damage to player
+    player.hp -= actual_damage
+    result['damage'] = actual_damage
+    result['player_defeated'] = player.hp <= 0
+    
+    # Apply status effects
+    if special_effects.get('blind'):
+        result['status_effects'].append('blinded')
+    if special_effects.get('freeze'):
+        result['status_effects'].append('frozen')
+    if special_effects.get('stun'):
+        result['status_effects'].append('stunned')
+    if special_effects.get('poison'):
+        result['status_effects'].append('poisoned')
+    if special_effects.get('burn'):
+        result['status_effects'].append('burning')
+    
+    # Handle special behaviors
+    if special_effects.get('heal_boss'):
+        heal_multiplier = special_effects.get('heal_boss')
+        if isinstance(heal_multiplier, bool):
+            heal_multiplier = 0.5
+        heal_amount = int(actual_damage * heal_multiplier)
+        enemy.hp = min(enemy.max_hp, enemy.hp + heal_amount)
+        result['enemy_healed'] = heal_amount
+    
+    # Build description
+    ability_name = ability.get('name', 'special attack')
+    result['description'] = f"{enemy.name} uses {ability_name}!"
+    
+    if result['resisted']:
+        reduction_percent = int(resistance_reduction * 100)
+        result['description'] += f" (Reduced by {reduction_percent}%)"
+    
+    return result
+
+
+def generate_resistance_potion():
+    """
+    Generate a random resistance potion
+    
+    Returns:
+        dict: Resistance potion item with element, reduction, duration
+    """
+    elements = ['fire', 'frost', 'lightning', 'poison', 'shadow', 'holy', 'void']
+    element = random.choice(elements)
+    
+    # Random strength: 30-50%
+    reduction = round(random.uniform(0.30, 0.50), 2)
+    
+    # Random duration: 3-5 turns
+    duration = random.randint(3, 5)
+    
+    # Format element name for display
+    element_name = element.title()
+    reduction_percent = int(reduction * 100)
+    
+    return {
+        'type': 'consumable',
+        'subtype': 'resistance_potion',
+        'name': f'{element_name} Resistance Potion',
+        'element': element,
+        'reduction': reduction,
+        'duration': duration,
+        'rarity': 'uncommon',
+        'description': f'Reduces {element} damage by {reduction_percent}% for {duration} turns'
+    }
+
+
 def generate_loot(enemy, player_level):
     """Generate loot from defeated enemy (no XP - that's distributed separately)"""
     # Exponential gold scaling: 20 * (1.13 ^ level)
@@ -304,6 +520,22 @@ def generate_loot(enemy, player_level):
     # Regular drops
     elif random.random() < 0.3:
         loot['items'].append(generate_random_item(player_level))
+    
+    # Resistance potion drops
+    if enemy.is_boss:
+        # Boss: 50% chance per potion, 2-3 potions
+        num_potions = random.randint(2, 3)
+        for _ in range(num_potions):
+            if random.random() < 0.5:
+                loot['items'].append(generate_resistance_potion())
+    elif hasattr(enemy, 'is_elite') and enemy.is_elite:
+        # Elite: 15% chance for 1 potion
+        if random.random() < 0.15:
+            loot['items'].append(generate_resistance_potion())
+    else:
+        # Common: 5% chance for 1 potion
+        if random.random() < 0.05:
+            loot['items'].append(generate_resistance_potion())
     
     return loot
 

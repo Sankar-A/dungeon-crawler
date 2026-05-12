@@ -32,8 +32,21 @@ let playerVisualY = 0;
 let activeModal = null;
 let selectedIndex = 0;
 
+// Blink targeting state
+let blinkTargetingMode = false;
+let validBlinkTiles = [];
+
 // Sprite renderer
 let spriteRenderer = null;
+
+// Attack zone and effect renderers
+let attackZoneRenderer = null;
+let effectRenderer = null;
+
+// UI components
+let telegraphUI = null;
+let resistanceUI = null;
+let cooldownUI = null;
 
 // Sprite loading
 const sprites = {
@@ -64,6 +77,17 @@ function checkSpritesLoaded() {
 
 // Initialize sprite renderer
 spriteRenderer = new SpriteRenderer();
+
+// Initialize attack zone and effect renderers (after canvas is available)
+if (ctx) {
+    attackZoneRenderer = new AttackZoneRenderer(ctx, TILE_SIZE);
+    effectRenderer = new EffectRenderer(ctx, TILE_SIZE);
+}
+
+// Initialize UI components
+telegraphUI = new TelegraphUI();
+resistanceUI = new ResistanceUI();
+cooldownUI = new CooldownUI();
 
 // Load sprites
 sprites.playerIdle = new Image();

@@ -118,6 +118,12 @@ function setupInputHandlers() {
         } else if (key === 'f') {
             e.preventDefault();
             showAreaLootModal();
+        } else if (key === 'b') {
+            e.preventDefault();
+            handleBlinkKey();
+        } else if (key === 'escape') {
+            e.preventDefault();
+            handleEscapeKey();
         }
         
         // Debug
@@ -215,4 +221,77 @@ function attackClosestEnemy() {
     } else {
         addLog('No enemies nearby!', 'info');
     }
+}
+
+// Blink input handling
+function handleBlinkKey() {
+    if (!player) return;
+    
+    // Check if blink is unlocked
+    if (!player.skills || !player.skills.blink || player.skills.blink === 0) {
+        addLog('Blink ability not unlocked!', 'error');
+        return;
+    }
+    
+    // Check if blink is on cooldown
+    if (player.blink_cooldown_end && Date.now() < player.blink_cooldown_end) {
+        const remaining = Math.ceil((player.blink_cooldown_end - Date.now()) / 1000);
+        addLog(`Blink on cooldown (${remaining}s remaining)`, 'error');
+        return;
+    }
+    
+    // Enter blink targeting mode
+    blinkTargetingMode = true;
+    socket.emit('get_blink_range');
+    addLog('Click a tile to blink, ESC to cancel', 'info');
+}
+
+function handleEscapeKey() {
+    if (blinkTargetingMode) {
+        // Exit blink targeting mode
+        blinkTargetingMode = false;
+        validBlinkTiles = [];
+        addLog('Blink cancelled', 'info');
+        renderDungeon();
+    }
+}
+
+// Add click handler for blink targeting
+if (canvas) {
+    canvas.addEventListener('click', (e) => {
+        if (!blinkTargetingMode || !player) return;
+        
+        // Get click position relative to canvas
+        const rect = canvas.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const clickY = e.clientY - rect.top;
+        
+        // Convert to tile coordinates
+        const tileX = Math.floor(clickX / TILE_SIZE);
+        const tileY = Math.floor(clickY / TILE_SIZE);
+        
+        // Get viewport to calculate world coordinates
+        const viewport = calculateViewport(player.x, player.y, dungeon);
+        const worldX = viewport.startX + tileX;
+        const worldY = viewport.startY + tileY;
+        
+        // Check if tile is in valid tiles array
+        const isValid = validBlinkTiles.some(tile => tile.x === worldX && tile.y === worldY);
+        
+        if (isValid) {
+            // Emit blink activation
+            socket.emit('activate_blink', {
+                target_x: worldX,
+                target_y: worldY
+            });
+            
+            // Exit targeting mode
+            blinkTargetingMode = false;
+            validBlinkTiles = [];
+        } else {
+            addLog('Invalid blink target', 'error');
+        }
+        
+        renderDungeon();
+    });
 }

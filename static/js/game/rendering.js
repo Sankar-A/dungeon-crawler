@@ -104,6 +104,11 @@ function startAnimationLoop() {
             updateDeathAnimations();
             updateSpecialEffects();
             
+            // Update cooldown UI
+            if (cooldownUI) {
+                cooldownUI.update();
+            }
+            
             // Interpolate player visual position towards actual position
             updatePlayerVisualPosition();
             
@@ -162,19 +167,37 @@ function renderDungeon() {
     ctx.save();
     ctx.translate(-viewport.offsetX, -viewport.offsetY);
     
+    // 1. Render dungeon tiles
     renderTiles(ctx, dungeon, viewport, sprites);
     renderStairs(ctx, entities, viewport, sprites, spriteRenderer);
+    
+    // 2. Render attack zones (under entities)
+    if (attackZoneRenderer) {
+        attackZoneRenderer.render(viewport.startX, viewport.startY);
+    }
+    
+    // 3. Render blink targeting overlay (if active)
+    if (blinkTargetingMode && attackZoneRenderer && validBlinkTiles) {
+        attackZoneRenderer.renderBlinkTargeting(validBlinkTiles, viewport.startX, viewport.startY);
+    }
     
     // Convert lootDrops object to array for rendering
     const lootArray = Object.values(lootDrops);
     renderLootDrops(ctx, lootArray, player, viewport, spriteRenderer);
     
     renderDeathAnimations(ctx, deathAnimations, viewport, sprites);
+    
+    // 4. Render entities (enemies, players)
     renderEnemies(ctx, enemies, viewport, sprites, spriteRenderer);
     renderOtherPlayers(ctx, otherPlayers, viewport, sprites, spriteRenderer);
     renderPlayer(ctx, player, viewport, sprites, spriteRenderer, attackAnimations, isWalking, walkFrameIndex);
     renderAttackAnimations();
     renderSpecialEffects(); // Render boss special attack effects
+    
+    // 5. Render effects (over entities)
+    if (effectRenderer) {
+        effectRenderer.render(viewport.startX, viewport.startY);
+    }
     
     ctx.restore();
     

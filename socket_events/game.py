@@ -212,12 +212,16 @@ def register_game_handlers(socketio):
     def handle_equip(data):
         player_id = request.sid
         if player_id not in players:
+            print(f"[EQUIP] Player {player_id} not found")
             return
         
         player = players[player_id]
         item = data.get('item')
         
+        print(f"[EQUIP] Player {player.name} (level {player.level}) trying to equip: {item.get('name')} (min_level: {item.get('min_level', 1)})")
+        
         if not player.can_equip(item):
+            print(f"[EQUIP] Level requirement not met")
             emit('equip_failed', {'reason': 'Level requirement not met'})
             return
         
@@ -227,25 +231,44 @@ def register_game_handlers(socketio):
             if inv_item.get('name') == item.get('name') and inv_item.get('type') == item.get('type'):
                 player.inventory.pop(i)
                 item_found = True
+                print(f"[EQUIP] Found item in inventory at index {i}")
                 break
         
         if not item_found:
+            print(f"[EQUIP] Item not found in inventory")
+            print(f"[EQUIP] Looking for: name={item.get('name')}, type={item.get('type')}")
+            print(f"[EQUIP] Inventory: {[(inv_item.get('name'), inv_item.get('type')) for inv_item in player.inventory]}")
             emit('equip_failed', {'reason': 'Item not in inventory'})
             return
         
+        # Determine if item is weapon or armor based on properties
+        is_weapon = 'damage' in item
+        is_armor = 'defense' in item
+        
+        print(f"[EQUIP] Item type check: is_weapon={is_weapon}, is_armor={is_armor}")
+        
         # Unequip current item and add to inventory
-        if item['type'] == 'weapon':
+        if is_weapon:
             if player.weapon:
                 player.inventory.append(player.weapon)
             player.weapon = item
-        elif item['type'] == 'armor':
+            print(f"[EQUIP] Equipped weapon: {item.get('name')}")
+        elif is_armor:
             if player.armor:
                 player.inventory.append(player.armor)
             player.armor = item
+            print(f"[EQUIP] Equipped armor: {item.get('name')}")
+        else:
+            # Item is neither weapon nor armor, return it to inventory
+            player.inventory.append(item)
+            print(f"[EQUIP] Item is neither weapon nor armor")
+            emit('equip_failed', {'reason': 'Item cannot be equipped'})
+            return
         
         # Save player data after equipping
         save_player_data(player)
         
+        print(f"[EQUIP] Successfully equipped {item.get('name')}")
         emit('item_equipped', {'player': player.to_dict()})
 
     @socketio.on('get_rare_weapons')

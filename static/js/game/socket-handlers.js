@@ -166,6 +166,11 @@ function setupSocketHandlers() {
         showInventoryModal(true); // Preserve selection after equipping
     });
     
+    socket.on('equip_failed', (data) => {
+        console.error('Equip failed:', data);
+        addLog(`Cannot equip: ${data.reason}`, 'error');
+    });
+    
     socket.on('loot_picked_up', (data) => {
         delete lootDrops[data.loot_id];
         
@@ -234,5 +239,230 @@ function setupSocketHandlers() {
     
     socket.on('rare_bosses_list', (data) => {
         showLoreModal('Epic Bosses', data.bosses);
+    });
+    
+    // Telegraph event handlers
+    socket.on('telegraph_started', (data) => {
+        console.log('Telegraph started:', data);
+        
+        // Show telegraph UI
+        if (telegraphUI) {
+            telegraphUI.show(data);
+        }
+        
+        // Add attack zone visualization
+        if (attackZoneRenderer && data.attack_zone_tiles) {
+            attackZoneRenderer.addZone(data.attack_zone_tiles, data.ability.attack_zone?.type || 'none');
+        }
+        
+        // Add telegraph warning effect above boss
+        if (effectRenderer && data.boss_position) {
+            effectRenderer.addTelegraphWarning(
+                data.boss_position.x,
+                data.boss_position.y,
+                data.ability.name
+            );
+        }
+        
+        // Add combat log message
+        addLog(`${data.boss_name} is preparing ${data.ability.name}!`, 'boss-attack');
+    });
+    
+    socket.on('telegraph_updated', (data) => {
+        console.log('Telegraph updated:', data);
+        
+        // Update countdown
+        if (telegraphUI) {
+            telegraphUI.update(data.turns_remaining);
+        }
+    });
+    
+    socket.on('telegraph_ended', (data) => {
+        console.log('Telegraph ended:', data);
+        
+        // Hide telegraph UI
+        if (telegraphUI) {
+            telegraphUI.hide();
+        }
+        
+        // Clear attack zones
+        if (attackZoneRenderer) {
+            attackZoneRenderer.clearZones();
+        }
+        
+        // Remove telegraph warning
+        if (effectRenderer) {
+            effectRenderer.removeTelegraphWarning();
+        }
+        
+        // Add combat log message
+        const result = data.execution_result;
+        if (result.avoided) {
+            addLog(`You avoided ${data.ability_name} by staying out of range!`, 'success');
+        } else {
+            addLog(`${data.ability_name} unleashed!`, 'boss-attack');
+            if (result.damage > 0) {
+                addLog(`Took ${result.damage} damage!`, 'damage');
+            }
+        }
+    });
+    
+    socket.on('telegraph_cancelled', (data) => {
+        console.log('Telegraph cancelled:', data);
+        
+        // Clean up all telegraph UI elements
+        if (telegraphUI) {
+            telegraphUI.hide();
+        }
+        if (attackZoneRenderer) {
+            attackZoneRenderer.clearZones();
+        }
+        if (effectRenderer) {
+            effectRenderer.removeTelegraphWarning();
+        }
+    });
+    
+    // Blink event handlers
+    socket.on('blink_activated', (data) => {
+        console.log('Blink activated:', data);
+        
+        // Add blink effects at start and end positions
+        if (effectRenderer) {
+            effectRenderer.addBlinkEffect(data.old_position.x, data.old_position.y, 'start');
+            effectRenderer.addBlinkEffect(data.new_position.x, data.new_position.y, 'end');
+        }
+        
+        // Update player position if it's us
+        if (data.player_id === socket.id) {
+            player.x = data.new_position.x;
+            player.y = data.new_position.y;
+            playerVisualX = data.new_position.x;
+            playerVisualY = data.new_position.y;
+        } else if (otherPlayers[data.player_id]) {
+            // Update other player position
+            otherPlayers[data.player_id].x = data.new_position.x;
+            otherPlayers[data.player_id].y = data.new_position.y;
+        }
+        
+        // Add combat log message
+        addLog(`${data.player_name} blinked ${data.distance} tiles!`, 'info');
+        
+        renderDungeon();
+    });
+    
+    socket.on('blink_cooldown_started', (data) => {
+        console.log('Blink cooldown started:', data);
+        
+        // Start cooldown UI
+        if (cooldownUI) {
+            cooldownUI.startCooldown(data.cooldown);
+        }
+    });
+    
+    socket.on('blink_failed', (data) => {
+        console.log('Blink failed:', data);
+        
+        // Display error message
+        addLog(`Blink failed: ${data.reason}`, 'error');
+        
+        // Exit blink targeting mode if active
+        if (blinkTargetingMode) {
+            blinkTargetingMode = false;
+            validBlinkTiles = [];
+            renderDungeon();
+        }
+    });
+    
+    socket.on('blink_range_response', (data) => {
+        console.log('Blink range response:', data);
+        
+        // Store valid tiles for targeting
+        validBlinkTiles = data.valid_tiles || [];
+        
+        // Trigger blink targeting UI update (will be rendered in game loop)
+        renderDungeon();
+    });
+    
+    // Resistance event handlers
+    socket.on('resistance_activated', (data) => {
+        console.log('Resistance activated:', data);
+        
+        // Show resistance UI
+        if (resistanceUI) {
+            resistanceUI.show(data);
+        }
+        
+        // Update player state if it's us
+        if (data.player_id === socket.id) {
+            player = data.player;
+        }
+        
+        // Add combat log message
+        let message = `${data.player_name} activated ${data.element.toUpperCase()} resistance!`;
+        if (data.replaced_element) {
+            message += ` (replaced ${data.replaced_element.toUpperCase()})`;
+        }
+        addLog(message, 'info');
+        
+        updateHUD();
+    });
+    
+    socket.on('resistance_expired', (data) => {
+        console.log('Resistance expired:', data);
+        
+        // Hide resistance UI if it's us
+        if (data.player_id === socket.id && resistanceUI) {
+            resistanceUI.hide();
+        }
+        
+        // Add combat log message
+        addLog(`${data.element.toUpperCase()} resistance expired`, 'info');
+    });
+    
+    // Avoidance combat log event handlers
+    socket.on('attack_avoided', (data) => {
+        console.log('Attack avoided:', data);
+        
+        // Add success message to combat log
+        if (data.player_id === socket.id) {
+            addLog(`You avoided ${data.ability_name} by staying out of range!`, 'success');
+        } else {
+            addLog(`${data.player_name} avoided ${data.ability_name}!`, 'info');
+        }
+    });
+    
+    socket.on('damage_resisted', (data) => {
+        console.log('Damage resisted:', data);
+        
+        // Add resistance info message to combat log
+        if (data.player_id === socket.id) {
+            addLog(`Your ${data.element.toUpperCase()} resistance reduced damage by ${data.reduction_amount} (${data.reduction_percent}%)!`, 'info');
+        } else {
+            addLog(`${data.player_name}'s resistance reduced damage by ${data.reduction_percent}%`, 'info');
+        }
+    });
+    
+    // Inventory discard event handler
+    socket.on('inventory_item_discarded', (data) => {
+        console.log('Inventory item discarded:', data);
+        
+        // Update player and inventory
+        player = data.player;
+        inventory = player.inventory || [];
+        
+        // Add log message
+        addLog(`Discarded ${data.item_name}`, 'loot');
+        
+        // Adjust selectedIndex if needed
+        if (selectedIndex >= inventory.length) {
+            selectedIndex = Math.max(0, inventory.length - 1);
+        }
+        
+        // Refresh the modal, preserving selection
+        if (activeModal === 'inventory-modal') {
+            showInventoryModal(true);
+        }
+        
+        updateHUD();
     });
 }
